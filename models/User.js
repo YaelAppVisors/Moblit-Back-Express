@@ -30,6 +30,15 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    perfil: {
+      type: String,
+      required: true,
+      default: "user",
+    },
+    negocio: {
+      type: String,
+      required: false,
+    },
     location: {
       type: [locationSchema],
       required: false,

@@ -1,14 +1,39 @@
 const mongoose = require("mongoose");
 
-const locationSchema = new mongoose.Schema(
+const optionsSchema = new mongoose.Schema(
   {
-    latitude: {
+    descripcion: {
       type: String,
       required: true,
     },
-    longitude: {
+    activo: {
+      type: Boolean,
+      required: true,
+      default: true
+    },
+  },
+  {
+    timestamps: true,
+  }
+);
+
+const formQuestionsSchema = new mongoose.Schema(
+  {
+    pregunta: {
       type: String,
       required: true,
+    },
+    tipo_dato: {
+      type: String,
+      required: true,
+    },
+    activo: {
+      type: Boolean,
+      required: true,
+      default: true,
+    },
+    opciones: {
+      type: [optionsSchema]
     },
   },
   {
@@ -19,13 +44,11 @@ const formGroupSchema = new mongoose.Schema(
   {
     nombre_grupo: {
       type: String,
-      required: true,
-      unique: true,
+      required: true
     },
     orden: {
       type: Number,
-      required: true,
-      unique: true,
+      required: true
     },
     activo: {
       type: Boolean,
@@ -33,7 +56,7 @@ const formGroupSchema = new mongoose.Schema(
       default: true,
     },
     preguntas: {
-      type: [locationSchema],
+      type: [formQuestionsSchema],
       required: false,
     },
   },

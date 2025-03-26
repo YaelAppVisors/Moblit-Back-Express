@@ -10,12 +10,12 @@ const NegociosSchema = new mongoose.Schema(
     descripcion_negocio: {
       type: String,
       required: true,
-      unique: true,
+      unique: false,
     },
     activo: {
-      type: String,
+      type: Boolean,
       required: true,
-      default: "true",
+      default: true,
     },
     formulario: {
       type: mongoose.Schema.Types.ObjectId,
