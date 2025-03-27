@@ -2,6 +2,7 @@ var express = require('express');
 var path = require('path');
 var cookieParser = require('cookie-parser');
 var logger = require('morgan');
+var cors = require('cors'); // Importa cors
 require("dotenv").config();
 const connectDB = require("./config/mongo");
 connectDB();
@@ -13,6 +14,7 @@ var formGroupRouter = require('./routes/formGroup');
 
 var app = express();
 
+app.use(cors()); // Configura cors
 app.use(logger('dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
