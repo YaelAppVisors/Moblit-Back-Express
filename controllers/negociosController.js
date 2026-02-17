@@ -2,7 +2,7 @@ const Negocios = require("../models/Negocios");
 
 const getNegocios = async (req, res) => {
   try {
-    const negocios = await Negocios.find();
+    const negocios = await Negocios.find().populate("formulario");
     res.json(negocios);
   } catch (error) {
     res.status(500).json({ message: error.message });
