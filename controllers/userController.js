@@ -20,6 +20,20 @@ const hasValidLocation = (location) => {
   );
 };
 
+const PLATFORM_ACCESS_VALUES = ["WEB", "MOVIL"];
+
+const hasValidPlatformAccess = (platformAccess) => {
+  if (!Array.isArray(platformAccess) || platformAccess.length === 0) return false;
+  return platformAccess.every(
+    (platform) =>
+      typeof platform === "string" &&
+      PLATFORM_ACCESS_VALUES.includes(platform.trim().toUpperCase())
+  );
+};
+
+const normalizePlatformAccess = (platformAccess = []) =>
+  [...new Set(platformAccess.map((platform) => platform.trim().toUpperCase()))];
+
 const sanitizeUser = (userDoc) => {
   const user = userDoc.toObject();
   delete user.password;
@@ -56,7 +70,16 @@ const getUserById = async (req, res) => {
 
 // Crear un nuevo usuario
 const createUser = async (req, res) => {
-  const { username, email, password, perfil, negocio, location, avatar } = req.body;
+  const {
+    username,
+    email,
+    password,
+    perfil,
+    negocio,
+    plataforma_acceso,
+    location,
+    avatar,
+  } = req.body;
 
   if (!username || !email || !password || !negocio) {
     return res
@@ -87,6 +110,15 @@ const createUser = async (req, res) => {
     });
   }
 
+  if (
+    plataforma_acceso !== undefined &&
+    !hasValidPlatformAccess(plataforma_acceso)
+  ) {
+    return res.status(400).json({
+      message: "plataforma_acceso debe ser un arreglo con WEB y/o MOVIL",
+    });
+  }
+
   try {
     const existingUser = await User.findOne({ email });
     if (existingUser) {
@@ -101,11 +133,17 @@ const createUser = async (req, res) => {
       password: hashedPassword,
       perfil,
       negocio,
+      plataforma_acceso:
+        plataforma_acceso !== undefined
+          ? normalizePlatformAccess(plataforma_acceso)
+          : undefined,
       location,
       avatar,
     });
     await newUser.save();
-    res.status(201).json(sanitizeUser(newUser));
+
+    const createdUser = await User.findById(newUser._id).populate("negocio");
+    res.status(201).json(sanitizeUser(createdUser));
   } catch (error) {
     res.status(400).json({ message: error.message });
   }
@@ -148,7 +186,17 @@ const loginUser = async (req, res) => {
 
 const updateUser = async (req, res) => {
   const { id } = req.params;
-  const { username, email, password, perfil, negocio, location, avatar } = req.body;
+  const {
+    username,
+    email,
+    password,
+    perfil,
+    negocio,
+    plataforma_acceso,
+    location,
+    avatar,
+    activo
+  } = req.body;
 
   if (!isValidObjectId(id)) {
     return res.status(400).json({ message: "Id de usuario inválido" });
@@ -182,6 +230,15 @@ const updateUser = async (req, res) => {
     }
   }
 
+  if (
+    plataforma_acceso !== undefined &&
+    !hasValidPlatformAccess(plataforma_acceso)
+  ) {
+    return res.status(400).json({
+      message: "plataforma_acceso debe ser un arreglo con WEB y/o MOVIL",
+    });
+  }
+
   if (avatar !== undefined && typeof avatar !== "string") {
     return res.status(400).json({ message: "avatar debe ser texto" });
   }
@@ -194,6 +251,9 @@ const updateUser = async (req, res) => {
   }
   if (perfil !== undefined) updates.perfil = perfil;
   if (negocio !== undefined) updates.negocio = negocio;
+  if (plataforma_acceso !== undefined) {
+    updates.plataforma_acceso = normalizePlatformAccess(plataforma_acceso);
+  }
   if (location !== undefined) updates.location = location;
   if (avatar !== undefined) updates.avatar = avatar;
 
@@ -212,7 +272,7 @@ const updateUser = async (req, res) => {
     const user = await User.findByIdAndUpdate(id, updates, {
       new: true,
       runValidators: true,
-    });
+    }).populate("negocio");
 
     if (!user) {
       return res.status(404).json({ message: "Usuario no encontrado" });

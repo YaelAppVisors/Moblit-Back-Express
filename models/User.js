@@ -41,6 +41,16 @@ const userSchema = new mongoose.Schema(
       ref: "Negocios",
       required: true,
     },
+    plataforma_acceso: {
+      type: [
+        {
+          type: String,
+          enum: ["WEB", "MOVIL"],
+        },
+      ],
+      required: false,
+      default: ["WEB"],
+    },
     location: {
       type: [locationSchema],
       required: false,
