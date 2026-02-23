@@ -32,17 +32,27 @@ const userSchema = new mongoose.Schema(
     },
     perfil: {
       type: String,
+      enum: ["admin", "user", "coor", "tecnico", "cliente"],
       required: true,
       default: "user",
     },
     negocio: {
-      type: String,
-      required: false,
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Negocios",
+      required: true,
     },
     location: {
       type: [locationSchema],
       required: false,
     },
+    activo: {
+      type: Boolean,
+      required: true,
+      default: true,
+    },
+    avatar: {
+      type: String
+    }
   },
   {
     timestamps: true,
