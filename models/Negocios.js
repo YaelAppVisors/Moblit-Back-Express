@@ -15,7 +15,6 @@ const NegociosSchema = new mongoose.Schema(
     regimen_fiscal: {
       type: String,
       required: false,
-      unique: true,
     },
     activo: {
       type: Boolean,
@@ -26,7 +25,7 @@ const NegociosSchema = new mongoose.Schema(
       type: [
         {
           type: mongoose.Schema.Types.ObjectId,
-          ref: "Form_Group",
+          ref: "Form",
         },
       ],
       required: false,

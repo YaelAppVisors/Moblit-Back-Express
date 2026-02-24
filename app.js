@@ -10,7 +10,7 @@ connectDB();
 var indexRouter = require('./routes/index');
 var usersRouter = require('./routes/users');
 var negociosRouter = require('./routes/negocios');
-var formGroupRouter = require('./routes/formGroup');
+var formRouter = require('./routes/form');
 
 var app = express();
 
@@ -24,6 +24,6 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use('/', indexRouter);
 app.use('/users', usersRouter);
 app.use('/negocios', negociosRouter);
-app.use('/formGroup', formGroupRouter);
+app.use('/form', formRouter);
 
 module.exports = app;
