@@ -18,6 +18,33 @@ const parseOptionalNumber = (value) => {
     return Number.isNaN(parsed) ? null : parsed;
 };
 
+const validateFieldType = (fieldType) =>
+    ['text', 'number', 'select', 'checkbox', 'date', 'radio'].includes(fieldType);
+
+const normalizeFieldPayload = (payload = {}) => ({
+    label: normalizeText(payload.label),
+    name: normalizeText(payload.name),
+    fieldType: normalizeText(payload.fieldType),
+    placeholder: payload.placeholder !== undefined ? normalizeText(payload.placeholder) : undefined,
+    allowMultiOption: payload.allowMultiOption,
+    validations: payload.validations,
+    required: payload.required,
+    activo: payload.activo,
+    opciones: payload.opciones,
+});
+
+const isValidFieldPayload = (field) => {
+    if (!field.label || !field.name || !field.fieldType) return false;
+    if (!validateFieldType(field.fieldType)) return false;
+    if (field.allowMultiOption !== undefined && typeof field.allowMultiOption !== 'boolean') return false;
+    if (field.required !== undefined && typeof field.required !== 'boolean') return false;
+    if (field.activo !== undefined && typeof field.activo !== 'boolean') return false;
+    if (field.validations !== undefined && typeof field.validations !== 'object') return false;
+    if (field.opciones !== undefined && !Array.isArray(field.opciones)) return false;
+    if (Array.isArray(field.opciones) && !field.opciones.every((opt) => opt && typeof opt.label === 'string')) return false;
+    return true;
+};
+
 // ==========================================
 // 1. GESTIÓN DE FORMULARIOS
 // ==========================================
@@ -148,13 +175,12 @@ const updateFormGroup = async (req, res) => {
 
 const postFormField = async (req, res) => {
     const { id_form, id_group } = req.params;
-    const label = normalizeText(req.body.label);
-    const name = normalizeText(req.body.name);
-    const fieldType = normalizeText(req.body.fieldType);
-    const { placeholder, allowMultiOption, validations, required } = req.body;
+    const normalizedField = normalizeFieldPayload(req.body);
 
     if (!isValidObjectId(id_form) || !isValidObjectId(id_group)) return res.status(400).json({ message: "Ids inválidos" });
-    if (!label || !name || !fieldType) return res.status(400).json({ message: "label, name y fieldType son obligatorios" });
+    if (!isValidFieldPayload(normalizedField)) {
+        return res.status(400).json({ message: "Field inválido: verifica label, name, fieldType y tipos de propiedades" });
+    }
 
     try {
         const form = await Form.findById(id_form);
@@ -163,9 +189,37 @@ const postFormField = async (req, res) => {
         const group = form.grupos.id(id_group);
         if (!group) return res.status(404).json({ message: "Grupo no encontrado" });
 
-        group.fields.push({
-            label, name, fieldType, placeholder, allowMultiOption, validations, required
-        });
+        group.fields.push(normalizedField);
+
+        await form.save();
+        res.status(201).json(form);
+    } catch (error) {
+        res.status(400).json({ message: error.message });
+    }
+};
+
+const postFormFieldsBulk = async (req, res) => {
+    const { id_form, id_group } = req.params;
+    const { fields } = req.body;
+
+    if (!isValidObjectId(id_form) || !isValidObjectId(id_group)) return res.status(400).json({ message: "Ids inválidos" });
+    if (!Array.isArray(fields) || fields.length === 0) {
+        return res.status(400).json({ message: "fields debe ser un arreglo con al menos un elemento" });
+    }
+
+    const normalizedFields = fields.map((field) => normalizeFieldPayload(field));
+    if (!normalizedFields.every(isValidFieldPayload)) {
+        return res.status(400).json({ message: "Uno o más fields son inválidos" });
+    }
+
+    try {
+        const form = await Form.findById(id_form);
+        if (!form) return res.status(404).json({ message: "Formulario no encontrado" });
+
+        const group = form.grupos.id(id_group);
+        if (!group) return res.status(404).json({ message: "Grupo no encontrado" });
+
+        group.fields.push(...normalizedFields);
 
         await form.save();
         res.status(201).json(form);
@@ -194,12 +248,48 @@ const updateFormField = async (req, res) => {
 
         if (label !== undefined) field.label = normalizeText(label);
         if (name !== undefined) field.name = normalizeText(name);
-        if (fieldType !== undefined) field.fieldType = normalizeText(fieldType);
+        if (fieldType !== undefined) {
+            const normalizedFieldType = normalizeText(fieldType);
+            if (!validateFieldType(normalizedFieldType)) {
+                return res.status(400).json({ message: "fieldType inválido" });
+            }
+            field.fieldType = normalizedFieldType;
+        }
         if (placeholder !== undefined) field.placeholder = normalizeText(placeholder);
+        if (activo !== undefined && typeof activo !== 'boolean') return res.status(400).json({ message: "activo debe ser booleano" });
         if (activo !== undefined) field.activo = activo;
+        if (allowMultiOption !== undefined && typeof allowMultiOption !== 'boolean') return res.status(400).json({ message: "allowMultiOption debe ser booleano" });
         if (allowMultiOption !== undefined) field.allowMultiOption = allowMultiOption;
+        if (validations !== undefined && typeof validations !== 'object') return res.status(400).json({ message: "validations debe ser un objeto" });
         if (validations !== undefined) field.validations = validations;
+        if (required !== undefined && typeof required !== 'boolean') return res.status(400).json({ message: "required debe ser booleano" });
         if (required !== undefined) field.required = required;
+
+        await form.save();
+        res.status(200).json(form);
+    } catch (error) {
+        res.status(400).json({ message: error.message });
+    }
+};
+
+const deleteFormField = async (req, res) => {
+    const { id_form, id_group, id_field } = req.params;
+
+    if (!isValidObjectId(id_form) || !isValidObjectId(id_group) || !isValidObjectId(id_field)) {
+        return res.status(400).json({ message: "Ids inválidos" });
+    }
+
+    try {
+        const form = await Form.findById(id_form);
+        if (!form) return res.status(404).json({ message: "Formulario no encontrado" });
+
+        const group = form.grupos.id(id_group);
+        if (!group) return res.status(404).json({ message: "Grupo no encontrado" });
+
+        const field = group.fields.id(id_field);
+        if (!field) return res.status(404).json({ message: "Campo no encontrado" });
+
+        field.deleteOne();
 
         await form.save();
         res.status(200).json(form);
@@ -270,7 +360,9 @@ module.exports = {
     postFormGroup,
     updateFormGroup,
     postFormField,
+    postFormFieldsBulk,
     updateFormField,
+    deleteFormField,
     postOption,
     updateOption
 };

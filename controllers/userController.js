@@ -163,7 +163,7 @@ const loginUser = async (req, res) => {
   }
 
   try {
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email }).populate("negocio");
 
     if (!user) {
       return res.status(401).json({ message: "Credenciales inválidas" });
@@ -256,6 +256,7 @@ const updateUser = async (req, res) => {
   }
   if (location !== undefined) updates.location = location;
   if (avatar !== undefined) updates.avatar = avatar;
+  if (activo !== undefined) updates.activo = activo;
 
   try {
     if (updates.email) {

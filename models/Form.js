@@ -91,6 +91,10 @@ const formSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    tipo_servicio: {
+      type: String,
+      required: false,
+    },
     activo: {
       type: Boolean,
       required: true,

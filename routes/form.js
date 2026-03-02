@@ -19,8 +19,9 @@ router.put('/:id_form/groups/:id_group', formController.updateFormGroup);
 // 3. RUTAS DE CAMPOS (Antes "Preguntas")
 // ==========================================
 router.post('/:id_form/groups/:id_group/fields', formController.postFormField);
+router.post('/:id_form/groups/:id_group/fields/bulk', formController.postFormFieldsBulk);
 router.put('/:id_form/groups/:id_group/fields/:id_field', formController.updateFormField);
-// router.delete('/:id_form/groups/:id_group/fields/:id_field', formController.deleteFormField);
+router.delete('/:id_form/groups/:id_group/fields/:id_field', formController.deleteFormField);
 
 // ==========================================
 // 4. RUTAS DE OPCIONES
