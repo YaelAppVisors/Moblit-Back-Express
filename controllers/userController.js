@@ -166,16 +166,22 @@ const loginUser = async (req, res) => {
     const user = await User.findOne({ email }).populate("negocio");
 
     if (!user) {
-      return res.status(401).json({ message: "Credenciales inválidas" });
+      return res.status(401).json({ message: "El usuario no existe" });
+    }
+
+    if (user?.activo === false) {
+      return res.status(401).json({ message: "El usuario se encuentra inhabilitado" });
     }
 
     const isPasswordValid = await bcrypt.compare(password, user.password);
 
     if (!isPasswordValid) {
-      return res.status(401).json({ message: "Credenciales inválidas" });
+      return res.status(401).json({ message: "La contraseña es incorrecta" });
     }
 
     res.json({
+      status: "success",
+      code: 200,
       message: "Inicio de sesión exitoso",
       user: sanitizeUser(user),
     });
