@@ -71,12 +71,12 @@ const NegociosSchema = new mongoose.Schema(
     },
     descripcion_negocio: {
       type: String,
-      required: true,
+      required: false,
       unique: false,
     },
     sector: {
       type: String,
-      required: true,
+      required: false,
     },
     planes: {
       type: [PlanSchema],

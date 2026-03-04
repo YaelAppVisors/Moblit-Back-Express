@@ -4,8 +4,12 @@ const formController = require('../controllers/formController');
 
 router.get('/', formController.getForms);
 router.get('/negocio/:id_negocio', formController.getFormsByNegocio);
+router.get('/negocio/:id_negocio/responses', formController.getFormResponsesByNegocio);
+router.get('/responses/:id_response', formController.getFormResponseById);
+router.patch('/responses/:id_response/cancel', formController.cancelFormResponse);
 router.get('/:id_form', formController.getFormById);
 router.post('/negocio/:id_negocio', formController.postForm);
+router.put('/:id_form', formController.updateForm);
 
 // ==========================================
 // 2. RUTAS DE GRUPOS
@@ -30,5 +34,11 @@ router.post('/:id_form/groups/:id_group/fields/:id_field/options', formControlle
 router.put('/:id_form/groups/:id_group/fields/:id_field/options/:id_option', formController.updateOption);
 
 // router.delete('/:id_form/groups/:id_group/fields/:id_field/options/:id_option', formController.deleteOption);
+
+// ==========================================
+// 5. RUTAS DE RESPUESTAS
+// ==========================================
+router.post('/:id_form/responses', formController.postFormResponse);
+router.get('/:id_form/responses', formController.getFormResponsesByForm);
 
 module.exports = router;
