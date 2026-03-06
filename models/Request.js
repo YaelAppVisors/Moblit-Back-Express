@@ -42,7 +42,7 @@ const HeaderSchema = new Schema(
         },
         productName: {
             type: String,
-            required: true
+            required: false
         },
         serviceType: {
             type: String,
@@ -58,15 +58,42 @@ const HeaderSchema = new Schema(
             ref: "User",
             required: true,
         },
+        createdBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+            required: true,
+        },
         comments: {
             type: String,
             required: false
+        },
+        activo: {
+            type: Boolean,
+            required: true,
+            default: true
         }
     },
     {
         _id: true,
         timestamps: true
     }
+);
+
+const optionsSchema = new mongoose.Schema(
+  {
+    label: {
+      type: String,
+      required: true,
+    },
+    activo: {
+      type: Boolean,
+      required: true,
+      default: true
+    },
+  },
+  {
+    timestamps: true,
+  }
 );
 
 const QuestionAnwerSchema = new mongoose.Schema(
@@ -178,14 +205,40 @@ const FormSchema = new Schema(
     }
 );
 
+const StatusSchema = new Schema(
+    {
+        statusName: {
+            type: String,
+            required: true,
+        },
+        createdBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+            required: true,
+        }
+    },
+    {
+        _id: true,
+        timestamps: true
+    }
+);
+
 const RequestSchema = new Schema({
     requestHeader: {
         type: HeaderSchema,
         required: true
     },
-    requestResponse: [
-        FormSchema
-    ]
+    requestResponse: {
+        type: FormSchema,
+        required: true
+    },
+    statusHistory: [{ // ----> Para futuras versiones de la aplicación
+        type: StatusSchema,
+        required: false
+    }],
+},
+{
+    timestamps: true
 });
 
 const Request = mongoose.model('Request', RequestSchema);
