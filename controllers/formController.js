@@ -219,13 +219,21 @@ const getFormById = async (req, res) => {
 
 const getFormsByNegocio = async (req, res) => {
     const { id_negocio } = req.params;
+    const { tipo_servicio } = req.query;
 
     if (!isValidObjectId(id_negocio)) {
         return res.status(400).json({ message: "Id de negocio inválido" });
     }
 
     try {
-        const forms = await Form.find({ negocio: id_negocio }).sort({ createdAt: -1 });
+        const query = { negocio: id_negocio };
+
+        if (tipo_servicio) {
+            query.tipo_servicio = tipo_servicio;
+        }
+
+        const forms = await Form.find(query).sort({ createdAt: -1 });
+        
         res.status(200).json(forms);
     } catch (error) {
         res.status(500).json({ message: error.message });
