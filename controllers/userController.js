@@ -40,10 +40,27 @@ const sanitizeUser = (userDoc) => {
   return user;
 };
 
-// Obtener todos los usuarios
+// Obtener todos los usuarios con filtros opcionales
 const getUsers = async (req, res) => {
   try {
-    const users = await User.find().sort({ createdAt: -1 }).populate("negocio");
+    const { perfil, negocio } = req.query;
+    const query = {};
+
+    if (perfil) {
+      query.perfil = perfil;
+    }
+
+    if (negocio) {
+      if (!isValidObjectId(negocio)) {
+        return res.status(400).json({ message: "Id de negocio inválido para el filtro" });
+      }
+      query.negocio = negocio;
+    }
+
+    const users = await User.find(query)
+      .sort({ createdAt: -1 })
+      .populate("negocio");
+
     res.json(users.map(sanitizeUser));
   } catch (error) {
     res.status(500).json({ message: error.message });
