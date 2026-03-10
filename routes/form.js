@@ -40,5 +40,6 @@ router.put('/:id_form/groups/:id_group/fields/:id_field/options/:id_option', for
 // ==========================================
 router.post('/:id_form/responses', formController.postFormResponse);
 router.get('/:id_form/responses', formController.getFormResponsesByForm);
+router.get("/service_types/available", formController.getServiceTypes);
 
 module.exports = router;

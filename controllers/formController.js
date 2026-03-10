@@ -240,6 +240,18 @@ const getFormsByNegocio = async (req, res) => {
     }
 };
 
+const getServiceTypes = async (req, res) => {
+  try {
+    const services = await Form.distinct("tipo_servicio");
+    
+    const filteredServices = services.filter(s => s != null && s !== "");
+    
+    res.status(200).json(filteredServices);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 const postForm = async (req, res) => {
     const { id_negocio } = req.params;
     const nombre_formulario = normalizeText(req.body.nombre_formulario);
@@ -966,5 +978,7 @@ module.exports = {
     getFormResponsesByForm,
     getFormResponsesByNegocio,
     getFormResponseById,
-    cancelFormResponse
+    cancelFormResponse,
+    getServiceTypes,
+
 };
