@@ -129,20 +129,29 @@ exports.updateRequest = async (req, res) => {
 
   try {
     const request = await Request.findById(RequestID);
-    if(!request){
-      return res.error('No se encontró el registro');
+    if (!request) {
+      return res.status(404).json({ message: 'No se encontró el registro' });
     }
 
-    const requestUpdated = await Request.findByIdAndUpdate(RequestID, update);
-    if(requestUpdated){
-      res.success('Registro actualizado exitosamente');
+    const requestUpdated = await Request.findByIdAndUpdate(RequestID, update, { new: true })
+      .populate([
+        { path: 'requestHeader.store', select: "-planes" },
+        { path: 'requestHeader.assignedTo', select: "-password" },
+        { path: 'requestHeader.createdBy', select: "-password" }
+      ]);
+
+    if (requestUpdated) {
+      return res.status(200).json({ 
+        message: 'Registro actualizado exitosamente', 
+        data: requestUpdated 
+      });
+    } else {
+      return res.status(400).json({ message: 'No fue posible actualizar el registro' });
     }
-    else{
-      res.error('No fue posible actualizar el registro');
-    }  
 
   } catch (err) {
-    res.error('Server error');
+    console.log(err);
+    return res.status(500).json({ message: 'Server error', error: err.message });
   }
 };
 
@@ -150,19 +159,18 @@ exports.deleteRequest = async (req, res) => {
   const RequestID = req.params.id;
   try {
     const request = await Request.findById(RequestID);
-    if(!request){
-      return res.error('No se encontró el registro');
+    if (!request) {
+      return res.status(404).json({ message: 'No se encontró el registro' });
     }
 
     const requestDeleted = await Request.findByIdAndDelete(RequestID);
-    if (requestDeleted){
-      res.success('Registro eliminado exitosamente');
-    }
-    else{
-      res.error('No fue posible eliminar el registro');
+    if (requestDeleted) {
+      return res.status(200).json({ message: 'Registro eliminado exitosamente' });
+    } else {
+      return res.status(400).json({ message: 'No fue posible eliminar el registro' });
     }
 
   } catch (err) {
-    res.error('Server error');
+    return res.status(500).json({ message: 'Server error' });
   }
 };
