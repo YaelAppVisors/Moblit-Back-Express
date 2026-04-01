@@ -39,7 +39,7 @@ const userSchema = new mongoose.Schema(
     negocio: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Negocios",
-      required: true,
+      required: false,
     },
     plataforma_acceso: {
       type: [
