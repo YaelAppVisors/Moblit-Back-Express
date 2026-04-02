@@ -98,10 +98,10 @@ const createUser = async (req, res) => {
     avatar,
   } = req.body;
 
-  if (!username || !email || !password || !negocio) {
+  if (!username || !email || !password ) {
     return res
       .status(400)
-      .json({ message: "username, email, password y negocio son obligatorios" });
+      .json({ message: "username, email y password son obligatorios" });
   }
 
   if (!isValidEmail(email)) {
