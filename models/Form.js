@@ -114,42 +114,7 @@ const formSchema = new mongoose.Schema(
     grupos: {
       type: [formGroupSchema],
       required: false,
-    },
-    configuracion_respuesta: {
-      acepta_respuestas: {
-        type: Boolean,
-        required: true,
-        default: true,
-      },
-      permite_anonimo: {
-        type: Boolean,
-        required: true,
-        default: false,
-      },
-      una_respuesta_por_usuario: {
-        type: Boolean,
-        required: true,
-        default: false,
-      },
-      fecha_inicio: {
-        type: Date,
-        required: false,
-      },
-      fecha_cierre: {
-        type: Date,
-        required: false,
-      },
-      limite_total_respuestas: {
-        type: Number,
-        required: false,
-        min: 0,
-      },
-      requiere_geolocalizacion: {
-        type: Boolean,
-        required: true,
-        default: false,
-      },
-    },
+    }
   },
   {
     timestamps: true,

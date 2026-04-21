@@ -288,7 +288,6 @@ const updateForm = async (req, res) => {
         tipo_servicio,
         activo,
         version,
-        configuracion_respuesta,
     } = req.body;
 
     if (!isValidObjectId(id_form)) {
@@ -323,84 +322,6 @@ const updateForm = async (req, res) => {
                 return res.status(400).json({ message: "version debe ser un entero mayor o igual a 1" });
             }
             form.version = version;
-        }
-
-        if (configuracion_respuesta !== undefined) {
-            if (
-                configuracion_respuesta === null ||
-                typeof configuracion_respuesta !== 'object' ||
-                Array.isArray(configuracion_respuesta)
-            ) {
-                return res.status(400).json({ message: "configuracion_respuesta debe ser un objeto" });
-            }
-
-            const currentConfig = form.configuracion_respuesta?.toObject
-                ? form.configuracion_respuesta.toObject()
-                : (form.configuracion_respuesta || {});
-
-            const nextConfig = { ...currentConfig };
-
-            if (configuracion_respuesta.acepta_respuestas !== undefined) {
-                if (typeof configuracion_respuesta.acepta_respuestas !== 'boolean') {
-                    return res.status(400).json({ message: "acepta_respuestas debe ser booleano" });
-                }
-                nextConfig.acepta_respuestas = configuracion_respuesta.acepta_respuestas;
-            }
-
-            if (configuracion_respuesta.permite_anonimo !== undefined) {
-                if (typeof configuracion_respuesta.permite_anonimo !== 'boolean') {
-                    return res.status(400).json({ message: "permite_anonimo debe ser booleano" });
-                }
-                nextConfig.permite_anonimo = configuracion_respuesta.permite_anonimo;
-            }
-
-            if (configuracion_respuesta.una_respuesta_por_usuario !== undefined) {
-                if (typeof configuracion_respuesta.una_respuesta_por_usuario !== 'boolean') {
-                    return res.status(400).json({ message: "una_respuesta_por_usuario debe ser booleano" });
-                }
-                nextConfig.una_respuesta_por_usuario = configuracion_respuesta.una_respuesta_por_usuario;
-            }
-
-            if (configuracion_respuesta.requiere_geolocalizacion !== undefined) {
-                if (typeof configuracion_respuesta.requiere_geolocalizacion !== 'boolean') {
-                    return res.status(400).json({ message: "requiere_geolocalizacion debe ser booleano" });
-                }
-                nextConfig.requiere_geolocalizacion = configuracion_respuesta.requiere_geolocalizacion;
-            }
-
-            if (configuracion_respuesta.limite_total_respuestas !== undefined) {
-                if (
-                    configuracion_respuesta.limite_total_respuestas !== null &&
-                    (typeof configuracion_respuesta.limite_total_respuestas !== 'number' || configuracion_respuesta.limite_total_respuestas < 0)
-                ) {
-                    return res.status(400).json({ message: "limite_total_respuestas debe ser número mayor o igual a 0" });
-                }
-                nextConfig.limite_total_respuestas = configuracion_respuesta.limite_total_respuestas === null
-                    ? undefined
-                    : configuracion_respuesta.limite_total_respuestas;
-            }
-
-            if (configuracion_respuesta.fecha_inicio !== undefined) {
-                if (configuracion_respuesta.fecha_inicio === null) {
-                    nextConfig.fecha_inicio = undefined;
-                } else {
-                    const parsedStart = parseAsDate(configuracion_respuesta.fecha_inicio);
-                    if (!parsedStart) return res.status(400).json({ message: "fecha_inicio inválida" });
-                    nextConfig.fecha_inicio = parsedStart;
-                }
-            }
-
-            if (configuracion_respuesta.fecha_cierre !== undefined) {
-                if (configuracion_respuesta.fecha_cierre === null) {
-                    nextConfig.fecha_cierre = undefined;
-                } else {
-                    const parsedEnd = parseAsDate(configuracion_respuesta.fecha_cierre);
-                    if (!parsedEnd) return res.status(400).json({ message: "fecha_cierre inválida" });
-                    nextConfig.fecha_cierre = parsedEnd;
-                }
-            }
-
-            form.configuracion_respuesta = nextConfig;
         }
 
         await form.save();
@@ -688,45 +609,7 @@ const postFormResponse = async (req, res) => {
             return res.status(400).json({ message: 'El formulario está inactivo' });
         }
 
-        const config = form.configuracion_respuesta || {};
-        const now = new Date();
 
-        if (config.acepta_respuestas === false && status === 'submitted') {
-            return res.status(400).json({ message: 'Este formulario no acepta respuestas actualmente' });
-        }
-
-        if (config.fecha_inicio && now < new Date(config.fecha_inicio)) {
-            return res.status(400).json({ message: 'El formulario aún no está disponible para responder' });
-        }
-
-        if (config.fecha_cierre && now > new Date(config.fecha_cierre)) {
-            return res.status(400).json({ message: 'El formulario ya no recibe respuestas' });
-        }
-
-        if (config.permite_anonimo === false && !user) {
-            return res.status(400).json({ message: 'Este formulario requiere un usuario autenticado' });
-        }
-
-        if (config.requiere_geolocalizacion === true) {
-            const hasLocation = metadata?.location?.latitude && metadata?.location?.longitude;
-            if (!hasLocation) {
-                return res.status(400).json({ message: 'Este formulario requiere geolocalización' });
-            }
-        }
-
-        if (config.limite_total_respuestas !== undefined && config.limite_total_respuestas !== null && status === 'submitted') {
-            const totalSubmitted = await FormResponse.countDocuments({ form: form._id, status: 'submitted' });
-            if (totalSubmitted >= config.limite_total_respuestas) {
-                return res.status(400).json({ message: 'Se alcanzó el límite total de respuestas para este formulario' });
-            }
-        }
-
-        if (config.una_respuesta_por_usuario === true && user && status === 'submitted') {
-            const existingResponse = await FormResponse.findOne({ form: form._id, user, status: 'submitted' });
-            if (existingResponse) {
-                return res.status(409).json({ message: 'El usuario ya envió una respuesta para este formulario' });
-            }
-        }
 
         const normalizedAnswers = [];
         const receivedFieldIds = new Set();
