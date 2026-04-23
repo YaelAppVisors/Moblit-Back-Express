@@ -145,9 +145,9 @@ function sectionTitle(doc, title, y, color, width) {
        .fontSize(11)
        .font('Helvetica-Bold')
        .text(title, 50, y);
-    y += 6;
+    y += 17;
     doc.rect(50, y, width, 2).fill(color);
-    y += 10;
+    y += 8;
     return y;
 }
 
