@@ -1,6 +1,7 @@
 const Request = require("../models/Request");
 const {isEmptyValue} = require('../helpers/ValidateValue');
 const mongoose = require("mongoose");
+const { generateRequestPdf } = require('../helpers/generateRequestPdf');
 
 exports.CreateRequest = async (req, res) => {
   const { requestHeader, requestResponse } = req.body;
@@ -172,5 +173,34 @@ exports.deleteRequest = async (req, res) => {
 
   } catch (err) {
     return res.status(500).json({ message: 'Server error' });
+  }
+};
+
+exports.generatePdf = async (req, res) => {
+  const requestID = req.params.id;
+
+  try {
+    const request = await Request.findById(requestID)
+      .populate([
+        { path: 'requestHeader.store',      select: '-planes' },
+        { path: 'requestHeader.assignedTo', select: '-password' },
+        { path: 'requestHeader.createdBy',  select: '-password' },
+      ])
+      .lean();
+
+    if (!request) {
+      return res.status(404).json({ message: 'Ticket no encontrado' });
+    }
+
+    const pdfBuffer = await generateRequestPdf(request);
+    const filename  = `reporte-${request.requestHeader.ticket}.pdf`;
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+
+    return res.end(pdfBuffer);
+  } catch (error) {
+    return res.status(500).json({ message: error?.message });
   }
 };
