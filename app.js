@@ -12,6 +12,8 @@ var usersRouter = require('./routes/users');
 var negociosRouter = require('./routes/negocios');
 var formRouter = require('./routes/form');
 var planRouter = require('./routes/plan');
+var dmsRouter = require('./routes/dms.routes')
+
 const requestRouter = require('./routes/private/request');
 
 var app = express();
@@ -29,5 +31,7 @@ app.use('/negocios', negociosRouter);
 app.use('/form', formRouter);
 app.use('/planes', planRouter);
 app.use('/request', requestRouter);
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/dms',dmsRouter)
 
 module.exports = app;

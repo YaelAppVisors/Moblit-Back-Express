@@ -31,7 +31,7 @@ const formFieldsSchema = new mongoose.Schema(
     fieldType: {
       type: String,
       required: true,
-      enum: ['text', 'number', 'select', 'checkbox', 'date', 'radio']
+      enum: ['text', 'number', 'select', 'checkbox', 'date', 'radio','image']
     },
     activo: {
       type: Boolean,
