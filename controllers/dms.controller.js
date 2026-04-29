@@ -30,4 +30,24 @@ const removeFile = async (req, res) => {
   }
 };
 
-module.exports = { uploadFile,removeFile };
+const removeFileByPath = async (req, res) => {
+  try {
+    const { path } = req.body;
+    
+    if (!path) {
+      return res.status(400).json({ success: false, message: "El path es requerido" });
+    }
+
+    await dmsService.deleteFileByPath(path);
+
+    res.status(200).json({
+      success: true,
+      message: "Archivo eliminado correctamente tanto del disco como de la DB"
+    });
+  } catch (error) {
+    const status = error.message.includes('encontrado') ? 404 : 500;
+    res.status(status).json({ success: false, message: error.message });
+  }
+};
+
+module.exports = { uploadFile,removeFile,removeFileByPath };

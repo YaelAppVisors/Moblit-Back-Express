@@ -35,8 +35,28 @@ const deleteFile = async (fileId) => {
 
   return await File.findByIdAndDelete(fileId);
 };
+const deleteFileByPath = async (fileUrl) => {
+  const fileRecord = await File.findOne({ url: fileUrl });
+  
+  if (!fileRecord) {
+    throw new Error('Archivo no encontrado en la base de datos');
+  }
+
+  try {
+    const absolutePath = path.join(process.cwd(), fileRecord.path);
+    
+    console.log("Intentando borrar en:", absolutePath);
+    
+    await fs.unlink(absolutePath);
+  } catch (err) {
+    console.error(`Error físico: ${err.code} - ${err.message}`);
+  }
+
+  return await File.findByIdAndDelete(fileRecord._id);
+};
 
 module.exports = { 
   processFile, 
-  deleteFile 
+  deleteFile ,
+  deleteFileByPath
 };
