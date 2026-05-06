@@ -20,7 +20,7 @@ const parseOptionalNumber = (value) => {
 };
 
 const validateFieldType = (fieldType) =>
-    ['text', 'number', 'select', 'checkbox', 'date', 'radio'].includes(fieldType);
+    ['text', 'number', 'select', 'checkbox', 'date', 'radio','image'].includes(fieldType);
 
 const normalizeFieldPayload = (payload = {}) => ({
     label: normalizeText(payload.label),
