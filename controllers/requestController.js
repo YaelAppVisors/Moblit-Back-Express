@@ -28,10 +28,28 @@ exports.CreateRequest = async (req, res) => {
     }
     
     try {
-        const requestCreated = new Request(req.body);
+        // Agregar estatus inicial "Pendiente" automáticamente
+        const requestData = {
+            ...req.body,
+            statusHistory: [{
+                statusName: 'Pendiente',
+                createdBy: requestHeader.createdBy
+            }]
+        };
+
+        const requestCreated = new Request(requestData);
         await requestCreated.save();
         
-        res.status(200).json({ message: 'El ticket se creó con éxito', data: requestCreated });
+        // Populate para retornar los datos completos
+        const populatedRequest = await Request.findById(requestCreated._id)
+            .populate([
+                {path: 'requestHeader.store', select: "-planes"},
+                {path: 'requestHeader.assignedTo', select: "-password"},
+                {path: 'requestHeader.createdBy', select: "-password"},
+                {path: 'statusHistory.createdBy', select: "-password"}
+            ]);
+        
+        res.status(200).json({ message: 'El ticket se creó con éxito', data: populatedRequest });
     } catch (err) {
     res.status(500).json({ message: err?.message });
     }
