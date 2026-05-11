@@ -48,7 +48,8 @@ exports.getRequestById = async (req, res) => {
     .populate([
         {path: 'requestHeader.store', select: "-planes"},
         {path: 'requestHeader.assignedTo', select: "-password"},
-        {path: 'requestHeader.createdBy', select: "-password"}
+        {path: 'requestHeader.createdBy', select: "-password"},
+        {path: 'statusHistory.createdBy', select: "-password"}
     ]);
     if (request) {
         return res.status(200).json({ message: "Ticket encontrado", data: request });
@@ -66,7 +67,8 @@ exports.getAllRequest = async (req, res) => {
     .populate([
         {path: 'requestHeader.store', select: "-planes"},
         {path: 'requestHeader.assignedTo', select: "-password"},
-        {path: 'requestHeader.createdBy', select: "-password"}
+        {path: 'requestHeader.createdBy', select: "-password"},
+        {path: 'statusHistory.createdBy', select: "-password"}
     ])
     .sort({ createdAt: -1 });
 
@@ -89,7 +91,8 @@ exports.getRequestByAssignedTo = async (req, res) => {
     .populate([
         {path: 'requestHeader.store', select: "-planes"},
         {path: 'requestHeader.assignedTo', select: "-password"},
-        {path: 'requestHeader.createdBy', select: "-password"}
+        {path: 'requestHeader.createdBy', select: "-password"},
+        {path: 'statusHistory.createdBy', select: "-password"}
     ])
     .sort({ createdAt: -1 });
     if (request) {
@@ -111,7 +114,8 @@ exports.getRequestByNegocio = async (req, res) => {
     .populate([
         {path: 'requestHeader.store', select: "-planes"},
         {path: 'requestHeader.assignedTo', select: "-password"},
-        {path: 'requestHeader.createdBy', select: "-password"}
+        {path: 'requestHeader.createdBy', select: "-password"},
+        {path: 'statusHistory.createdBy', select: "-password"}
     ])
     .sort({ createdAt: -1 });
     if (request) {
@@ -121,6 +125,54 @@ exports.getRequestByNegocio = async (req, res) => {
     }
   } catch (error) {
     return res.status(500).json({ message: error?.message });
+  }
+};
+
+exports.updateRequestStatus = async (req, res) => {
+  const RequestID = req.params.id;
+  const { statusName, createdBy } = req.body;
+
+  if (!statusName || !createdBy) {
+    return res.status(400).json({ message: 'El nombre del estatus y el usuario son requeridos' });
+  }
+
+  const validStatuses = ['Pendiente', 'Finalizado', 'Cancelado'];
+  if (!validStatuses.includes(statusName)) {
+    return res.status(400).json({ 
+      message: `Estatus inválido. Los estatus válidos son: ${validStatuses.join(', ')}` 
+    });
+  }
+
+  try {
+    const request = await Request.findById(RequestID);
+    if (!request) {
+      return res.status(404).json({ message: 'No se encontró el ticket' });
+    }
+
+    const newStatus = {
+      statusName,
+      createdBy: new mongoose.Types.ObjectId(createdBy)
+    };
+
+    request.statusHistory.push(newStatus);
+    await request.save();
+
+    const updatedRequest = await Request.findById(RequestID)
+      .populate([
+        { path: 'requestHeader.store', select: "-planes" },
+        { path: 'requestHeader.assignedTo', select: "-password" },
+        { path: 'requestHeader.createdBy', select: "-password" },
+        { path: 'statusHistory.createdBy', select: "-password" }
+      ]);
+
+    return res.status(200).json({ 
+      message: 'Estatus actualizado exitosamente', 
+      data: updatedRequest 
+    });
+
+  } catch (err) {
+    console.log(err);
+    return res.status(500).json({ message: 'Server error', error: err.message });
   }
 };
 
@@ -138,7 +190,8 @@ exports.updateRequest = async (req, res) => {
       .populate([
         { path: 'requestHeader.store', select: "-planes" },
         { path: 'requestHeader.assignedTo', select: "-password" },
-        { path: 'requestHeader.createdBy', select: "-password" }
+        { path: 'requestHeader.createdBy', select: "-password" },
+        { path: 'statusHistory.createdBy', select: "-password" }
       ]);
 
     if (requestUpdated) {

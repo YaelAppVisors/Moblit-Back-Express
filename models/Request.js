@@ -210,6 +210,7 @@ const StatusSchema = new Schema(
         statusName: {
             type: String,
             required: true,
+            enum: ['Pendiente', 'Finalizado', 'Cancelado']
         },
         createdBy: {
             type: mongoose.Schema.Types.ObjectId,

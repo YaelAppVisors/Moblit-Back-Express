@@ -3,6 +3,7 @@ const router = express.Router();
 const requestController = require('../../controllers/requestController');
 
 router.post('/', requestController.CreateRequest);
+router.put('/:id/status', requestController.updateRequestStatus);
 router.put('/:id', requestController.updateRequest);
 router.delete('/:id', requestController.deleteRequest);
 router.get('/', requestController.getAllRequest);
