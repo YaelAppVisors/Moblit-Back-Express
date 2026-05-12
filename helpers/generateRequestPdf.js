@@ -1,4 +1,6 @@
 const PDFDocument = require('pdfkit');
+const fs = require('fs');
+const path = require('path');
 
 /**
  * Generates a PDF buffer for a given Request document.
@@ -101,6 +103,9 @@ function generateRequestPdf(request) {
 
         // ── SECTION: Form Response ───────────────────────────────────────────────
         const grupos = requestResponse?.grupos ?? [];
+        
+        const evidenciasAlFinal = [];
+
         if (grupos.length > 0) {
             y = sectionTitle(doc, 'RESPUESTAS DEL FORMULARIO', y, PRIMARY_COLOR, PAGE_WIDTH);
 
@@ -121,12 +126,83 @@ function generateRequestPdf(request) {
                    .text(grupo.nombre_grupo, 56, y + 5, { width: PAGE_WIDTH - 12 });
                 y += 22;
 
-                const fieldRows = (grupo.fields ?? [])
-                    .filter(f => f.activo)
-                    .map(f => [f.label, f.answer ?? '—']);
+                const fieldRows = [];
+
+                (grupo.fields ?? []).forEach(f => {
+                    if (!f.activo) return;
+
+                    if (f.fieldType === 'image') {
+                        if (!f.answer || f.answer.trim() === '') {
+                            fieldRows.push([f.label, 'Sin evidencias']);
+                        } else {
+                            const paths = f.answer.split(',').map(p => p.trim()).filter(Boolean);
+                            if (paths.length > 0) {
+                                fieldRows.push([f.label, `${paths.length} evidencia(s), ver al final del documento`]);
+                                evidenciasAlFinal.push({
+                                    grupo: grupo.nombre_grupo,
+                                    label: f.label,
+                                    paths: paths
+                                });
+                            } else {
+                                fieldRows.push([f.label, 'Sin evidencias']);
+                            }
+                        }
+                    } else {
+                        fieldRows.push([f.label, f.answer ?? '—']);
+                    }
+                });
 
                 y = renderTwoColumnTable(doc, fieldRows, y, PAGE_WIDTH, LIGHT_GRAY, TEXT_COLOR);
                 y += 10;
+            }
+        }
+
+        // ── SECTION: Anexo Fotográfico ─────────────────
+        if (evidenciasAlFinal.length > 0) {
+            doc.addPage();
+            y = 50;
+            y = sectionTitle(doc, 'ANEXO DE EVIDENCIAS FOTOGRÁFICAS', y, PRIMARY_COLOR, PAGE_WIDTH);
+
+            for (const evidencia of evidenciasAlFinal) {
+                if (y > doc.page.height - 100) {
+                    doc.addPage();
+                    y = 50;
+                }
+
+                doc.fillColor(DARK_GRAY).fontSize(8).font('Helvetica-Bold').text(`Grupo: ${evidencia.grupo}`, 50, y);
+                y += 12;
+                doc.fillColor('#333333').fontSize(10).font('Helvetica-Bold').text(evidencia.label, 50, y);
+                y += 15;
+
+                for (const imgPath of evidencia.paths) {
+                    const absolutePath = path.join(process.cwd(), imgPath);
+
+                    if (fs.existsSync(absolutePath)) {
+                        if (y > doc.page.height - 250) {
+                            doc.addPage();
+                            y = 50;
+                        }
+
+                        try {
+                            doc.y = y;
+                            doc.x = 50;
+                            doc.image(absolutePath, {
+                                fit: [PAGE_WIDTH, 300],
+                                align: 'center'
+                            });
+                            
+                            y = doc.y + 20; 
+                        } catch (error) {
+                            doc.fillColor('red').fontSize(9).font('Helvetica').text(`[Error de formato al renderizar la imagen: ${imgPath}]`, 50, y);
+                            y = doc.y + 15;
+                        }
+                    } else {
+                        doc.fillColor(DARK_GRAY).fontSize(9).font('Helvetica').text(`[Archivo no encontrado físicamente: ${imgPath}]`, 50, y);
+                        y = doc.y + 15;
+                    }
+                }
+                
+                y += 15;
             }
         }
 
