@@ -45,7 +45,7 @@ const answerSchema = new mongoose.Schema(
     fieldType: {
       type: String,
       required: true,
-      enum: ["text", "number", "select", "checkbox", "date", "radio"],
+      enum: ["text", "number", "select", "checkbox", "date", "radio",'image', 'signature'],
     },
     value: {
       type: mongoose.Schema.Types.Mixed,
