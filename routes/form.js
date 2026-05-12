@@ -10,6 +10,7 @@ router.patch('/responses/:id_response/cancel', formController.cancelFormResponse
 router.get('/:id_form', formController.getFormById);
 router.post('/negocio/:id_negocio', formController.postForm);
 router.put('/:id_form', formController.updateForm);
+router.put('/:id_form/default_group', formController.defaultGroup);
 
 // ==========================================
 // 2. RUTAS DE GRUPOS
