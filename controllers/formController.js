@@ -2,6 +2,7 @@ const Negocios = require("../models/Negocios");
 const mongoose = require("mongoose");
 const Form = require("../models/Form");
 const FormResponse = require("../models/FormResponse");
+const {groupHeader, groupFields} = require('../config/FormGroupDefault');
 
 const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
 
@@ -274,8 +275,54 @@ const postForm = async (req, res) => {
         if (!Array.isArray(negocio.formularios)) negocio.formularios = [];
         negocio.formularios.push(newForm._id);
         await negocio.save();
+        await createDefaultGroup(newForm._id);
 
         res.status(201).json(newForm);
+    } catch (error) {
+        res.status(400).json({ message: error.message });
+    }
+};
+
+const createDefaultGroup = async (idForm) => {
+    const id_form = idForm;
+    const nombre_grupo = normalizeText(groupHeader.nombre_grupo);
+    const ordenNumber = Number(groupHeader.orden);
+
+    if (!isValidObjectId(id_form)) return res.status(400).json({ message: "Id de formulario inválido" });
+
+    try {
+        const form = await Form.findById(id_form);
+        if (!form) return res.status(404).json({ message: "Formulario no encontrado" });
+
+        form.grupos.push({ nombre_grupo, orden: ordenNumber, fields: groupFields });
+        await form.save();
+        
+        return(form);
+    } catch (error) {
+        res.status(400).json({ message: error.message });
+    }
+};
+
+const defaultGroup = async (req, res) => {
+    const { id_form } = req.params;
+    const nombre_grupo = normalizeText(groupHeader.nombre_grupo);
+    const ordenNumber = Number(groupHeader.orden);
+
+    if (!isValidObjectId(id_form)) return res.status(400).json({ message: "Id de formulario inválido" });
+
+    try {
+        const form = await Form.findById(id_form);
+        if (!form) return res.status(404).json({ message: "Formulario no encontrado" });
+        const groupExists = await Form.find({$and: [
+          { _id: id_form },
+          { "grupos.orden": 0 },
+        ]});
+        if (groupExists && groupExists.length > 0) return res.status(404).json({ message: "El grupo default ya existe para este formulario" });
+
+        form.grupos.push({ nombre_grupo, orden: ordenNumber, fields: groupFields });
+        await form.save();
+        
+        return res.status(200).json(form);
     } catch (error) {
         res.status(400).json({ message: error.message });
     }
@@ -863,5 +910,5 @@ module.exports = {
     getFormResponseById,
     cancelFormResponse,
     getServiceTypes,
-
+    defaultGroup
 };
