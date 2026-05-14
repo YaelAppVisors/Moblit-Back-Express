@@ -154,7 +154,7 @@ exports.updateRequestStatus = async (req, res) => {
     return res.status(400).json({ message: 'El nombre del estatus y el usuario son requeridos' });
   }
 
-  const validStatuses = ['Pendiente', 'Finalizado', 'Cancelado'];
+  const validStatuses = ['Pendiente', 'En proceso', 'Finalizado', 'Cancelado', 'Cerrado', 'Desfasado'];
   if (!validStatuses.includes(statusName)) {
     return res.status(400).json({ 
       message: `Estatus inválido. Los estatus válidos son: ${validStatuses.join(', ')}` 
