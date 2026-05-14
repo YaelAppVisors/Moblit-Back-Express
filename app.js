@@ -15,6 +15,7 @@ var planRouter = require('./routes/plan');
 var dmsRouter = require('./routes/dms.routes')
 
 const requestRouter = require('./routes/private/request');
+const hallazgosRouter = require('./routes/hallazgos');
 
 var app = express();
 
@@ -31,6 +32,7 @@ app.use('/negocios', negociosRouter);
 app.use('/form', formRouter);
 app.use('/planes', planRouter);
 app.use('/request', requestRouter);
+app.use('/hallazgos', hallazgosRouter);
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/dms',dmsRouter)
 
