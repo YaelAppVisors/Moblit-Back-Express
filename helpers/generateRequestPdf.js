@@ -126,7 +126,8 @@ function generateRequestPdf(request) {
                    .text(grupo.nombre_grupo, 56, y + 5, { width: PAGE_WIDTH - 12 });
                 y += 22;
 
-                const fieldRows = [];
+                const fieldRows     = [];
+                const signatureFields = [];
 
                 (grupo.fields ?? []).forEach(f => {
                     if (!f.activo) return;
@@ -147,13 +148,24 @@ function generateRequestPdf(request) {
                                 fieldRows.push([f.label, 'Sin evidencias']);
                             }
                         }
+                    } else if (
+                        f.fieldType === 'signature' ||
+                        f.fieldType === 'firma' ||
+                        (f.answer && /^\/uploads\/.+\.(png|jpg|jpeg|gif|webp)$/i.test(f.answer.trim()))
+                    ) {
+                        signatureFields.push({ label: f.label, path: f.answer?.trim() });
                     } else {
                         fieldRows.push([f.label, f.answer ?? '—']);
                     }
                 });
 
                 y = renderTwoColumnTable(doc, fieldRows, y, PAGE_WIDTH, LIGHT_GRAY, TEXT_COLOR);
-                y += 10;
+                y += 8;
+
+                for (const sig of signatureFields) {
+                    y = renderSignatureBlock(doc, sig.label, sig.path, y, PAGE_WIDTH, ACCENT_COLOR);
+                    y += 10;
+                }
             }
         }
 
@@ -239,15 +251,26 @@ function drawHorizontalRule(doc, y, color) {
 function renderTwoColumnTable(doc, rows, y, pageWidth, bgColor, textColor) {
     const colLabel = pageWidth * 0.38;
     const colValue = pageWidth * 0.62;
-    const rowHeight = 20;
-    const paddingX = 6;
-    const paddingY = 5;
+    const paddingX  = 6;
+    const paddingY  = 5;
+    const lineGap   = 2;
 
     rows.forEach((row, i) => {
         const [label, value] = row;
+        const labelStr = String(label ?? '');
+        const valueStr = String(value ?? '—');
+
+        // Measure the actual height each cell needs so the rectangle fits the text
+        doc.font('Helvetica-Bold').fontSize(9);
+        const labelHeight = doc.heightOfString(labelStr, { width: colLabel - paddingX * 2, lineGap });
+
+        doc.font('Helvetica').fontSize(9);
+        const valueHeight = doc.heightOfString(valueStr, { width: colValue - paddingX * 2, lineGap });
+
+        const rowHeight = Math.max(labelHeight, valueHeight) + paddingY * 2;
         const rowBg = i % 2 === 0 ? bgColor : '#ffffff';
 
-        // Check page break
+        // Check page break using the real row height
         if (y + rowHeight > doc.page.height - 60) {
             doc.addPage();
             y = 50;
@@ -259,15 +282,86 @@ function renderTwoColumnTable(doc, rows, y, pageWidth, bgColor, textColor) {
         doc.fillColor('#333333')
            .fontSize(9)
            .font('Helvetica-Bold')
-           .text(label ?? '', 50 + paddingX, y + paddingY, { width: colLabel - paddingX * 2 });
+           .text(labelStr, 50 + paddingX, y + paddingY, {
+               width: colLabel - paddingX * 2,
+               lineGap,
+               lineBreak: true
+           });
 
         doc.fillColor(textColor)
            .fontSize(9)
            .font('Helvetica')
-           .text(String(value ?? '—'), 50 + colLabel + paddingX, y + paddingY, { width: colValue - paddingX * 2 });
+           .text(valueStr, 50 + colLabel + paddingX, y + paddingY, {
+               width: colValue - paddingX * 2,
+               lineGap,
+               lineBreak: true
+           });
 
         y += rowHeight;
     });
+
+    return y;
+}
+
+/**
+ * Renders a signature image block below a group table.
+ * Returns the new y position.
+ */
+function renderSignatureBlock(doc, label, imgPath, y, pageWidth, accentColor) {
+    const BOX_W  = Math.min(pageWidth * 0.52, 280);
+    const BOX_H  = 90;
+    const margin = 50;
+
+    if (y + BOX_H + 50 > doc.page.height - 60) {
+        doc.addPage();
+        y = 50;
+    }
+
+    // Label
+    doc.fillColor('#333333')
+       .fontSize(9)
+       .font('Helvetica-Bold')
+       .text(label + ':', margin, y);
+    y += 13;
+
+    // Box — light fill + colored border
+    doc.rect(margin, y, BOX_W, BOX_H).fill('#f7f9fc');
+    doc.rect(margin, y, BOX_W, BOX_H)
+       .strokeColor(accentColor)
+       .lineWidth(1.5)
+       .stroke();
+
+    const absolutePath = imgPath ? path.join(process.cwd(), imgPath) : null;
+    if (absolutePath && fs.existsSync(absolutePath)) {
+        try {
+            doc.image(absolutePath, margin + 6, y + 6, {
+                fit:    [BOX_W - 12, BOX_H - 12],
+                align:  'center',
+                valign: 'center'
+            });
+        } catch (e) {
+            doc.fillColor('#aaa')
+               .fontSize(8).font('Helvetica')
+               .text('[Error al cargar la firma]', margin + 6, y + BOX_H / 2 - 5,
+                     { width: BOX_W - 12, align: 'center' });
+        }
+    } else {
+        doc.fillColor('#bbb')
+           .fontSize(8).font('Helvetica')
+           .text('[Sin firma]', margin + 6, y + BOX_H / 2 - 5,
+                 { width: BOX_W - 12, align: 'center' });
+    }
+
+    y += BOX_H;
+
+    // Signature underline + caption
+    doc.rect(margin, y, BOX_W, 1.5).fill(accentColor);
+    y += 5;
+    doc.fillColor('#888')
+       .fontSize(7)
+       .font('Helvetica')
+       .text(label, margin, y, { width: BOX_W, align: 'center' });
+    y += 14;
 
     return y;
 }
