@@ -105,6 +105,7 @@ function generateRequestPdf(request) {
         const grupos = requestResponse?.grupos ?? [];
         
         const evidenciasAlFinal = [];
+        const firmasAlFinal     = [];
 
         if (grupos.length > 0) {
             y = sectionTitle(doc, 'RESPUESTAS DEL FORMULARIO', y, PRIMARY_COLOR, PAGE_WIDTH);
@@ -126,8 +127,7 @@ function generateRequestPdf(request) {
                    .text(grupo.nombre_grupo, 56, y + 5, { width: PAGE_WIDTH - 12 });
                 y += 22;
 
-                const fieldRows     = [];
-                const signatureFields = [];
+                const fieldRows = [];
 
                 (grupo.fields ?? []).forEach(f => {
                     if (!f.activo) return;
@@ -153,19 +153,37 @@ function generateRequestPdf(request) {
                         f.fieldType === 'firma' ||
                         (f.answer && /^\/uploads\/.+\.(png|jpg|jpeg|gif|webp)$/i.test(f.answer.trim()))
                     ) {
-                        signatureFields.push({ label: f.label, path: f.answer?.trim() });
+                        fieldRows.push([f.label, 'Ver al final del documento']);
+                        firmasAlFinal.push({ grupo: grupo.nombre_grupo, label: f.label, path: f.answer?.trim() });
                     } else {
                         fieldRows.push([f.label, f.answer ?? '—']);
                     }
                 });
 
                 y = renderTwoColumnTable(doc, fieldRows, y, PAGE_WIDTH, LIGHT_GRAY, TEXT_COLOR);
-                y += 8;
+                y += 10;
+            }
+        }
 
-                for (const sig of signatureFields) {
-                    y = renderSignatureBlock(doc, sig.label, sig.path, y, PAGE_WIDTH, ACCENT_COLOR);
-                    y += 10;
+        // ── SECTION: Firmas ──────────────────────────────────────────────────────
+        if (firmasAlFinal.length > 0) {
+            doc.addPage();
+            y = 50;
+            y = sectionTitle(doc, 'FIRMAS', y, PRIMARY_COLOR, PAGE_WIDTH);
+            y += 10;
+
+            for (const firma of firmasAlFinal) {
+                if (y + 170 > doc.page.height - 60) {
+                    doc.addPage();
+                    y = 50;
                 }
+                doc.fillColor(DARK_GRAY)
+                   .fontSize(8)
+                   .font('Helvetica-Bold')
+                   .text(`Grupo: ${firma.grupo}`, 50, y);
+                y += 12;
+                y = renderSignatureBlock(doc, firma.label, firma.path, y, PAGE_WIDTH, ACCENT_COLOR);
+                y += 15;
             }
         }
 
