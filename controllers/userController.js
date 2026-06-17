@@ -1,6 +1,8 @@
 const User = require("../models/User");
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
+const { resolveUserPermissions } = require("../services/rbac.service");
 
 const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
 
@@ -23,16 +25,39 @@ const hasValidLocation = (location) => {
 const PLATFORM_ACCESS_VALUES = ["WEB", "MOVIL"];
 
 const hasValidPlatformAccess = (platformAccess) => {
-  if (!Array.isArray(platformAccess) || platformAccess.length === 0) return false;
-  return platformAccess.every(
+  // Si llega como string JSON, parsearlo
+  let access = platformAccess;
+  if (typeof platformAccess === 'string') {
+    try {
+      access = JSON.parse(platformAccess);
+    } catch (e) {
+      return false;
+    }
+  }
+  
+  if (!Array.isArray(access) || access.length === 0)
+    return false;
+  return access.every(
     (platform) =>
       typeof platform === "string" &&
-      PLATFORM_ACCESS_VALUES.includes(platform.trim().toUpperCase())
+      PLATFORM_ACCESS_VALUES.includes(platform.trim().toUpperCase()),
   );
 };
 
-const normalizePlatformAccess = (platformAccess = []) =>
-  [...new Set(platformAccess.map((platform) => platform.trim().toUpperCase()))];
+const normalizePlatformAccess = (platformAccess = []) => {
+  // Si llega como string JSON, parsearlo
+  let access = platformAccess;
+  if (typeof platformAccess === 'string') {
+    try {
+      access = JSON.parse(platformAccess);
+    } catch (e) {
+      return [];
+    }
+  }
+  
+  if (!Array.isArray(access)) return [];
+  return [...new Set(access.map((platform) => platform.trim().toUpperCase()))];
+};
 
 const sanitizeUser = (userDoc) => {
   const user = userDoc.toObject();
@@ -52,14 +77,17 @@ const getUsers = async (req, res) => {
 
     if (negocio) {
       if (!isValidObjectId(negocio)) {
-        return res.status(400).json({ message: "Id de negocio inválido para el filtro" });
+        return res
+          .status(400)
+          .json({ message: "Id de negocio inválido para el filtro" });
       }
       query.negocio = negocio;
     }
 
     const users = await User.find(query)
       .sort({ createdAt: -1 })
-      .populate("negocio");
+      .populate("negocio")
+      .populate("perfil_ref");
 
     res.json(users.map(sanitizeUser));
   } catch (error) {
@@ -75,7 +103,9 @@ const getUserById = async (req, res) => {
   }
 
   try {
-    const user = await User.findById(id);
+    const user = await User.findById(id)
+      .populate("negocio")
+      .populate("perfil_ref");
     if (!user) {
       return res.status(404).json({ message: "Usuario no encontrado" });
     }
@@ -92,13 +122,15 @@ const createUser = async (req, res) => {
     email,
     password,
     perfil,
+    perfil_ref,
+    permissions_override,
     negocio,
     plataforma_acceso,
     location,
     avatar,
   } = req.body;
 
-  if (!username || !email || !password ) {
+  if (!username || !email || !password) {
     return res
       .status(400)
       .json({ message: "username, email y password son obligatorios" });
@@ -109,18 +141,23 @@ const createUser = async (req, res) => {
   }
 
   if (typeof password !== "string" || password.trim().length < 6) {
-    return res
-      .status(400)
-      .json({
-        message: "La contraseña debe ser un texto de al menos 6 caracteres",
-      });
+    return res.status(400).json({
+      message: "La contraseña debe ser un texto de al menos 6 caracteres",
+    });
   }
 
   if (negocio && !isValidObjectId(negocio)) {
     return res.status(400).json({ message: "Id de negocio inválido" });
   }
 
-  if (location && (!Array.isArray(location) || !location.every(hasValidLocation))) {
+  if (perfil_ref && !isValidObjectId(perfil_ref)) {
+    return res.status(400).json({ message: "Id de perfil inválido" });
+  }
+
+  if (
+    location &&
+    (!Array.isArray(location) || !location.every(hasValidLocation))
+  ) {
     return res.status(400).json({
       message:
         "location debe ser un arreglo de objetos con latitude y longitude",
@@ -136,6 +173,16 @@ const createUser = async (req, res) => {
     });
   }
 
+  const avatarPath = req.file
+    ? `/uploads/${req.file.filename}`
+    : avatar !== undefined
+      ? avatar
+      : undefined;
+
+  if (!req.file && avatar !== undefined && typeof avatar !== "string") {
+    return res.status(400).json({ message: "avatar debe ser texto" });
+  }
+
   try {
     const existingUser = await User.findOne({ email });
     if (existingUser) {
@@ -149,17 +196,21 @@ const createUser = async (req, res) => {
       email,
       password: hashedPassword,
       perfil,
+      perfil_ref,
+      permissions_override,
       negocio,
       plataforma_acceso:
         plataforma_acceso !== undefined
           ? normalizePlatformAccess(plataforma_acceso)
           : undefined,
       location,
-      avatar,
+      avatar: avatarPath,
     });
     await newUser.save();
 
-    const createdUser = await User.findById(newUser._id).populate("negocio");
+    const createdUser = await User.findById(newUser._id)
+      .populate("negocio")
+      .populate("perfil_ref");
     res.status(201).json(sanitizeUser(createdUser));
   } catch (error) {
     res.status(400).json({ message: error.message });
@@ -180,14 +231,18 @@ const loginUser = async (req, res) => {
   }
 
   try {
-    const user = await User.findOne({ email }).populate("negocio");
+    const user = await User.findOne({ email })
+      .populate("negocio")
+      .populate("perfil_ref");
 
     if (!user) {
       return res.status(401).json({ message: "El usuario no existe" });
     }
 
     if (user?.activo === false) {
-      return res.status(401).json({ message: "El usuario se encuentra inhabilitado" });
+      return res
+        .status(401)
+        .json({ message: "El usuario se encuentra inhabilitado" });
     }
 
     const isPasswordValid = await bcrypt.compare(password, user.password);
@@ -196,10 +251,24 @@ const loginUser = async (req, res) => {
       return res.status(401).json({ message: "La contraseña es incorrecta" });
     }
 
+    const token = jwt.sign(
+      {
+        sub: String(user._id),
+        email: user.email,
+        perfil: user.perfil,
+      },
+      process.env.JWT_SECRET || "change_this_secret",
+      {
+        expiresIn: "12h",
+      },
+    );
+
     res.json({
       status: "success",
       code: 200,
       message: "Inicio de sesión exitoso",
+      token,
+      permissions: resolveUserPermissions(user),
       user: sanitizeUser(user),
     });
   } catch (error) {
@@ -214,11 +283,13 @@ const updateUser = async (req, res) => {
     email,
     password,
     perfil,
+    perfil_ref,
+    permissions_override,
     negocio,
     plataforma_acceso,
     location,
     avatar,
-    activo
+    activo,
   } = req.body;
 
   if (!isValidObjectId(id)) {
@@ -233,15 +304,17 @@ const updateUser = async (req, res) => {
     return res.status(400).json({ message: "Id de negocio inválido" });
   }
 
+  if (perfil_ref && !isValidObjectId(perfil_ref)) {
+    return res.status(400).json({ message: "Id de perfil inválido" });
+  }
+
   if (
     password !== undefined &&
     (typeof password !== "string" || password.trim().length < 6)
   ) {
-    return res
-      .status(400)
-      .json({
-        message: "La contraseña debe ser un texto de al menos 6 caracteres",
-      });
+    return res.status(400).json({
+      message: "La contraseña debe ser un texto de al menos 6 caracteres",
+    });
   }
 
   if (location !== undefined) {
@@ -252,7 +325,8 @@ const updateUser = async (req, res) => {
       });
     }
   }
-
+  console.log("Plataforma acceso recibido:", plataforma_acceso);
+  console.log("Tipo:", typeof plataforma_acceso, "Es array:", Array.isArray(plataforma_acceso));
   if (
     plataforma_acceso !== undefined &&
     !hasValidPlatformAccess(plataforma_acceso)
@@ -262,7 +336,15 @@ const updateUser = async (req, res) => {
     });
   }
 
-  if (avatar !== undefined && typeof avatar !== "string") {
+  const avatarPath = req.file
+    ? `/uploads/${req.file.filename}`
+    : avatar !== undefined
+      ? avatar
+      : undefined;
+
+  console.log("Avatar recibido:", avatar);
+
+  if (!req.file && avatar !== undefined && typeof avatar !== "string") {
     return res.status(400).json({ message: "avatar debe ser texto" });
   }
 
@@ -273,12 +355,18 @@ const updateUser = async (req, res) => {
     updates.password = await bcrypt.hash(password, 10);
   }
   if (perfil !== undefined) updates.perfil = perfil;
+  if (perfil_ref !== undefined) updates.perfil_ref = perfil_ref || null;
+  if (permissions_override !== undefined) {
+    updates.permissions_override = Array.isArray(permissions_override)
+      ? [...new Set(permissions_override)]
+      : [];
+  }
   if (negocio !== undefined) updates.negocio = negocio;
   if (plataforma_acceso !== undefined) {
     updates.plataforma_acceso = normalizePlatformAccess(plataforma_acceso);
   }
   if (location !== undefined) updates.location = location;
-  if (avatar !== undefined) updates.avatar = avatar;
+  if (avatarPath !== undefined) updates.avatar = avatarPath;
   if (activo !== undefined) updates.activo = activo;
 
   try {
@@ -289,14 +377,18 @@ const updateUser = async (req, res) => {
       });
 
       if (duplicatedEmail) {
-        return res.status(409).json({ message: "El correo ya está registrado" });
+        return res
+          .status(409)
+          .json({ message: "El correo ya está registrado" });
       }
     }
 
     const user = await User.findByIdAndUpdate(id, updates, {
       new: true,
       runValidators: true,
-    }).populate("negocio");
+    })
+      .populate("negocio")
+      .populate("perfil_ref");
 
     if (!user) {
       return res.status(404).json({ message: "Usuario no encontrado" });

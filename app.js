@@ -16,6 +16,15 @@ var dmsRouter = require('./routes/dms.routes')
 
 const requestRouter = require('./routes/private/request');
 const hallazgosRouter = require('./routes/hallazgos');
+const profilesRouter = require('./routes/profiles');
+const adminRouter = require('./routes/admin');
+const reportsRouter = require('./routes/reports');
+const dashboardRouter = require('./routes/dashboard');
+const { ensureDefaultProfiles } = require('./services/rbac.service');
+
+ensureDefaultProfiles().catch((error) => {
+	console.error('No fue posible inicializar perfiles por defecto:', error.message);
+});
 
 var app = express();
 
@@ -33,6 +42,10 @@ app.use('/form', formRouter);
 app.use('/planes', planRouter);
 app.use('/request', requestRouter);
 app.use('/hallazgos', hallazgosRouter);
+app.use('/profiles', profilesRouter);
+app.use('/admin', adminRouter);
+app.use('/reports', reportsRouter);
+app.use('/dashboard', dashboardRouter);
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/dms',dmsRouter)
 

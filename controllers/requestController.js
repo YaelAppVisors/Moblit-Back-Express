@@ -2,6 +2,7 @@ const Request = require("../models/Request");
 const {isEmptyValue} = require('../helpers/ValidateValue');
 const mongoose = require("mongoose");
 const { generateRequestPdf } = require('../helpers/generateRequestPdf');
+const { nextFolio } = require("../services/folio.service");
 
 exports.CreateRequest = async (req, res) => {
   const { requestHeader, requestResponse } = req.body;
@@ -10,9 +11,6 @@ exports.CreateRequest = async (req, res) => {
     
     if( isEmptyValue(requestHeader?.clientData) || isEmptyValue(requestHeader?.clientData?.clientFullName) ){
         return res.status(400).json({ message: 'Los datos del cliente son requeridos' });
-    }
-    if( isEmptyValue(requestHeader?.ticket) ){
-        return res.status(400).json({ message: 'El número de referencia es requerido' });
     }
     if( isEmptyValue(requestHeader?.serviceType) ){
         return res.status(400).json({ message: 'El tipo de servicio es requerido' });
@@ -28,9 +26,24 @@ exports.CreateRequest = async (req, res) => {
     }
     
     try {
+        let ticket = requestHeader?.ticket;
+
+        if (isEmptyValue(ticket)) {
+            const generatedFolio = await nextFolio({
+              modulo: "REQUEST",
+              negocio: requestHeader.store,
+              prefijo: "TKT",
+            });
+            ticket = generatedFolio.folio;
+        }
+
         // Agregar estatus inicial "Pendiente" automáticamente
         const requestData = {
             ...req.body,
+            requestHeader: {
+              ...requestHeader,
+              ticket,
+            },
             statusHistory: [{
                 statusName: 'Pendiente',
                 createdBy: requestHeader.createdBy

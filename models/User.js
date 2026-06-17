@@ -36,6 +36,17 @@ const userSchema = new mongoose.Schema(
       required: true,
       default: "user",
     },
+    perfil_ref: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Profile",
+      required: false,
+      default: null,
+    },
+    permissions_override: {
+      type: [String],
+      required: false,
+      default: [],
+    },
     negocio: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Negocios",
