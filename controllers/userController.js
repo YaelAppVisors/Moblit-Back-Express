@@ -14,12 +14,15 @@ const isValidEmail = (email = "") => {
 const hasValidLocation = (location) => {
   if (!location || typeof location !== "object") return false;
   const { latitude, longitude } = location;
-  return (
-    typeof latitude === "string" &&
-    latitude.trim() !== "" &&
-    typeof longitude === "string" &&
-    longitude.trim() !== ""
-  );
+
+  const isValidCoord = (coord) => {
+    if (typeof coord === "number") return !isNaN(coord);
+    if (typeof coord === "string")
+      return coord.trim() !== "" && !isNaN(parseFloat(coord));
+    return false;
+  };
+
+  return isValidCoord(latitude) && isValidCoord(longitude);
 };
 
 const PLATFORM_ACCESS_VALUES = ["WEB", "MOVIL"];
@@ -27,16 +30,15 @@ const PLATFORM_ACCESS_VALUES = ["WEB", "MOVIL"];
 const hasValidPlatformAccess = (platformAccess) => {
   // Si llega como string JSON, parsearlo
   let access = platformAccess;
-  if (typeof platformAccess === 'string') {
+  if (typeof platformAccess === "string") {
     try {
       access = JSON.parse(platformAccess);
     } catch (e) {
       return false;
     }
   }
-  
-  if (!Array.isArray(access) || access.length === 0)
-    return false;
+
+  if (!Array.isArray(access) || access.length === 0) return false;
   return access.every(
     (platform) =>
       typeof platform === "string" &&
@@ -47,14 +49,14 @@ const hasValidPlatformAccess = (platformAccess) => {
 const normalizePlatformAccess = (platformAccess = []) => {
   // Si llega como string JSON, parsearlo
   let access = platformAccess;
-  if (typeof platformAccess === 'string') {
+  if (typeof platformAccess === "string") {
     try {
       access = JSON.parse(platformAccess);
     } catch (e) {
       return [];
     }
   }
-  
+
   if (!Array.isArray(access)) return [];
   return [...new Set(access.map((platform) => platform.trim().toUpperCase()))];
 };
@@ -90,6 +92,52 @@ const getUsers = async (req, res) => {
       .populate("perfil_ref");
 
     res.json(users.map(sanitizeUser));
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+const getUbications = async (req, res) => {
+  try {
+    const { perfil, negocio } = req.query;
+
+    const query = {
+      location: {
+        $exists: true,
+        $ne: null,
+        $ne: [],
+      },
+    };
+
+    if (perfil) {
+      query.perfil = perfil;
+    }
+
+    if (negocio) {
+      if (!isValidObjectId(negocio)) {
+        return res
+          .status(400)
+          .json({ message: "Id de negocio inválido para el filtro" });
+      }
+      query.negocio = negocio;
+    }
+
+    const users = await User.find(query)
+      .sort({ createdAt: -1 })
+      .populate("location");
+
+    const result = users.map((user) => {
+      const userObj = sanitizeUser(user);
+
+      return {
+        ...userObj,
+        location: user.location
+          .sort((a, b) => b.createdAt - a.createdAt) // más recientes primero
+          .slice(0, 5), // solo 5
+      };
+    });
+
+    res.json(result);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -326,7 +374,12 @@ const updateUser = async (req, res) => {
     }
   }
   console.log("Plataforma acceso recibido:", plataforma_acceso);
-  console.log("Tipo:", typeof plataforma_acceso, "Es array:", Array.isArray(plataforma_acceso));
+  console.log(
+    "Tipo:",
+    typeof plataforma_acceso,
+    "Es array:",
+    Array.isArray(plataforma_acceso),
+  );
   if (
     plataforma_acceso !== undefined &&
     !hasValidPlatformAccess(plataforma_acceso)
@@ -402,7 +455,7 @@ const updateUser = async (req, res) => {
 
 const putUserLocation = async (req, res) => {
   const { location } = req.body;
-
+  console.log("Location recibido:", location);
   if (!isValidObjectId(req.params.id)) {
     return res.status(400).json({ message: "Id de usuario inválido" });
   }
@@ -451,12 +504,126 @@ const deleteUser = async (req, res) => {
   }
 };
 
+// Actualizar la imagen de perfil del usuario autenticado
+const updateOwnAvatar = async (req, res) => {
+  try {
+    if (!req.authUser) {
+      return res.status(401).json({ message: "No autenticado" });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ message: "No se proporcionó archivo de imagen" });
+    }
+
+    const avatarPath = `/uploads/${req.file.filename}`;
+    
+    const updatedUser = await User.findByIdAndUpdate(
+      req.authUser._id,
+      { avatar: avatarPath },
+      { new: true }
+    )
+      .populate("negocio")
+      .populate("perfil_ref");
+
+    res.json({
+      message: "Imagen de perfil actualizada correctamente",
+      user: sanitizeUser(updatedUser)
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Actualizar información propia del usuario autenticado
+const updateOwnProfile = async (req, res) => {
+  try {
+    if (!req.authUser) {
+      return res.status(401).json({ message: "No autenticado" });
+    }
+
+    const { username, email, password } = req.body;
+    const updates = {};
+
+    // Solo permitir actualizar username, email y password
+    if (username !== undefined) {
+      updates.username = username;
+    }
+
+    if (email !== undefined) {
+      if (!isValidEmail(email)) {
+        return res.status(400).json({ message: "Formato de correo inválido" });
+      }
+
+      // Verificar que el correo no esté en uso por otro usuario
+      const duplicatedEmail = await User.findOne({
+        email,
+        _id: { $ne: req.authUser._id },
+      });
+
+      if (duplicatedEmail) {
+        return res.status(409).json({ message: "El correo ya está registrado" });
+      }
+
+      updates.email = email;
+    }
+
+    if (password !== undefined) {
+      if (typeof password !== "string" || password.trim().length < 6) {
+        return res.status(400).json({
+          message: "La contraseña debe ser un texto de al menos 6 caracteres",
+        });
+      }
+      updates.password = await bcrypt.hash(password, 10);
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(
+      req.authUser._id,
+      updates,
+      { new: true, runValidators: true }
+    )
+      .populate("negocio")
+      .populate("perfil_ref");
+
+    res.json({
+      message: "Perfil actualizado correctamente",
+      user: sanitizeUser(updatedUser)
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Obtener el perfil del usuario autenticado
+const getOwnProfile = async (req, res) => {
+  try {
+    if (!req.authUser) {
+      return res.status(401).json({ message: "No autenticado" });
+    }
+
+    const user = await User.findById(req.authUser._id)
+      .populate("negocio")
+      .populate("perfil_ref");
+
+    if (!user) {
+      return res.status(404).json({ message: "Usuario no encontrado" });
+    }
+
+    res.json(sanitizeUser(user));
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   getUsers,
+  getUbications,
   getUserById,
   createUser,
   loginUser,
   updateUser,
   putUserLocation,
   deleteUser,
+  updateOwnAvatar,
+  updateOwnProfile,
+  getOwnProfile,
 };

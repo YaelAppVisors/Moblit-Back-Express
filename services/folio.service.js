@@ -36,7 +36,6 @@ const nextFolio = async ({
     {
       $setOnInsert: {
         prefijo: normalizedPrefix,
-        secuencia: 0,
         activo: true,
       },
       $inc: {
