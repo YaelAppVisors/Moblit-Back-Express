@@ -67,6 +67,38 @@ const HeaderSchema = new Schema(
             type: String,
             required: false
         },
+        descripcion: {
+            type: String,
+            required: false
+        },
+        ubicacion: {
+            type: String,
+            required: false
+        },
+        fechaEstimada: {
+            type: String,
+            required: false
+        },
+        horaEstimada: {
+            type: String,
+            required: false
+        },
+        notasInternas: {
+            type: String,
+            required: false
+        },
+        nivelDesfase: {
+            type: String,
+            required: false,
+            enum: ['bajo', 'medio', 'alto'],
+            default: 'bajo',
+        },
+        desfaseHoras: {
+            type: Number,
+            required: false,
+            default: 0,
+            min: 0
+        },
         activo: {
             type: Boolean,
             required: true,

@@ -26,6 +26,39 @@ const NegociosSchema = new mongoose.Schema(
       type: String,
       required: false,
     },
+    desfase_bajo_horas: {
+      type: Number,
+      required: false,
+      default: 1,
+      min: 0,
+    },
+    desfase_bajo_color: {
+      type: String,
+      required: false,
+      default: "#22c55e",
+    },
+    desfase_medio_horas: {
+      type: Number,
+      required: false,
+      default: 3,
+      min: 0,
+    },
+    desfase_medio_color: {
+      type: String,
+      required: false,
+      default: "#f59e0b",
+    },
+    desfase_alto_horas: {
+      type: Number,
+      required: false,
+      default: 6,
+      min: 0,
+    },
+    desfase_alto_color: {
+      type: String,
+      required: false,
+      default: "#ef4444",
+    },
     activo: {
       type: Boolean,
       required: true,
