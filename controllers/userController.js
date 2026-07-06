@@ -71,6 +71,12 @@ const sanitizeUser = (userDoc) => {
   return user;
 };
 
+const sanitizeUserForLogin = (userDoc) => {
+  const user = sanitizeUser(userDoc);
+  delete user.location;
+  return user;
+};
+
 // Obtener todos los usuarios con filtros opcionales
 const getUsers = async (req, res) => {
   try {
@@ -401,7 +407,7 @@ const loginUser = async (req, res) => {
       message: "Inicio de sesión exitoso",
       token,
       permissions: resolveUserPermissions(user),
-      user: sanitizeUser(user),
+      user: sanitizeUserForLogin(user),
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
