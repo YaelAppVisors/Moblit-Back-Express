@@ -97,4 +97,12 @@ router.get('/inspectors/workload', dashboardController.getInspectorWorkload);
  */
 router.get('/inspectors/all', dashboardController.getAllInspectors);
 
+/**
+ * @route   GET /dashboard/tecnicos/estatus
+ * @desc    Obtener técnicos con su estatus de disponibilidad (disponible/asignado/en_atencion/en_espera)
+ * @access  Private
+ * @query   negocioId (opcional) - filtrar por negocio
+ */
+router.get('/tecnicos/estatus', dashboardController.getTecnicosConEstatus);
+
 module.exports = router;

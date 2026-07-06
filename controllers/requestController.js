@@ -4,6 +4,54 @@ const {isEmptyValue} = require('../helpers/ValidateValue');
 const mongoose = require("mongoose");
 const { generateRequestPdf } = require('../helpers/generateRequestPdf');
 const { nextFolio } = require("../services/folio.service");
+const { PERMISSIONS } = require("../services/rbac.service");
+
+const hasGlobalRequestAccess = (req) => {
+  if (!req?.authUser) return false;
+  if (String(req.authUser.perfil || "").toLowerCase() === "admin") return true;
+  return Array.isArray(req.authPermissions)
+    && req.authPermissions.includes(PERMISSIONS.NEGOCIOS_MANAGE);
+};
+
+const getAuthNegocioId = (req) => {
+  if (!req?.authUser?.negocio) return null;
+  return String(req.authUser.negocio);
+};
+
+const getRequestStoreId = (request = {}) => {
+  const store = request?.requestHeader?.store;
+  if (!store) return null;
+  if (typeof store === "object" && store._id) {
+    return String(store._id);
+  }
+  return String(store);
+};
+
+const buildStoreScopeFilter = (req) => {
+  if (hasGlobalRequestAccess(req)) {
+    return {};
+  }
+
+  const negocioId = getAuthNegocioId(req);
+  if (!negocioId) {
+    return { "requestHeader.store": { $in: [] } };
+  }
+
+  return { "requestHeader.store": new mongoose.Types.ObjectId(negocioId) };
+};
+
+const ensureRequestAccess = (req, request) => {
+  if (hasGlobalRequestAccess(req)) {
+    return true;
+  }
+
+  const negocioId = getAuthNegocioId(req);
+  if (!negocioId) {
+    return false;
+  }
+
+  return getRequestStoreId(request) === negocioId;
+};
 
 const syncRequestDesfaseStatus = async (request) => {
   if (!request) return request;
@@ -78,6 +126,16 @@ exports.CreateRequest = async (req, res) => {
     }
     
     try {
+        if (!hasGlobalRequestAccess(req)) {
+          const authNegocioId = getAuthNegocioId(req);
+          if (!authNegocioId) {
+            return res.status(403).json({ message: 'No tienes un negocio asignado para crear tickets' });
+          }
+          if (String(requestHeader.store) !== authNegocioId) {
+            return res.status(403).json({ message: 'No tienes permisos para crear tickets en otro negocio' });
+          }
+        }
+
         let ticket = requestHeader?.ticket;
         let desfaseHoras = requestHeader?.desfaseHoras ?? 0;
         const nivelDesfase = ['bajo', 'medio', 'alto'].includes(requestHeader?.nivelDesfase)
@@ -147,6 +205,9 @@ exports.getRequestById = async (req, res) => {
   try {
     const request = await Request.findById(requestID);
     if (request) {
+        if (!ensureRequestAccess(req, request)) {
+          return res.status(403).json({ message: 'No tienes permisos para consultar este ticket' });
+        }
         await syncRequestDesfaseStatus(request);
         const populatedRequest = await request.populate([
             {path: 'requestHeader.store', select: "-planes"},
@@ -165,7 +226,7 @@ exports.getRequestById = async (req, res) => {
 
 exports.getAllRequest = async (req, res) => {
    try {
-    const request = await Request.find().sort({ createdAt: -1 });
+  const request = await Request.find(buildStoreScopeFilter(req)).sort({ createdAt: -1 });
 
     if (request) {
         await Promise.all(request.map((item) => syncRequestDesfaseStatus(item)));
@@ -189,7 +250,11 @@ exports.getRequestByAssignedTo = async (req, res) => {
 
   try {
     const objectId = new mongoose.Types.ObjectId(userID);
-    const request = await Request.find({'requestHeader.assignedTo': objectId}).sort({ createdAt: -1 });
+    const filter = {
+      'requestHeader.assignedTo': objectId,
+      ...buildStoreScopeFilter(req),
+    };
+    const request = await Request.find(filter).sort({ createdAt: -1 });
     if (request) {
         await Promise.all(request.map((item) => syncRequestDesfaseStatus(item)));
         const populatedRequests = await Request.populate(request, [
@@ -208,10 +273,17 @@ exports.getRequestByAssignedTo = async (req, res) => {
 };
 
 exports.getRequestByNegocio = async (req, res) => {
-  const userID = req.params.id;
+  const negocioId = req.params.id;
 
   try {
-    const objectId = new mongoose.Types.ObjectId(userID);
+    if (!hasGlobalRequestAccess(req)) {
+      const authNegocioId = getAuthNegocioId(req);
+      if (!authNegocioId || authNegocioId !== String(negocioId)) {
+        return res.status(403).json({ message: 'No tienes permisos para consultar tickets de otro negocio' });
+      }
+    }
+
+    const objectId = new mongoose.Types.ObjectId(negocioId);
     const request = await Request.find({'requestHeader.store': objectId}).sort({ createdAt: -1 });
     if (request) {
         await Promise.all(request.map((item) => syncRequestDesfaseStatus(item)));
@@ -251,6 +323,10 @@ exports.updateRequestStatus = async (req, res) => {
       return res.status(404).json({ message: 'No se encontró el ticket' });
     }
 
+    if (!ensureRequestAccess(req, request)) {
+      return res.status(403).json({ message: 'No tienes permisos para actualizar este ticket' });
+    }
+
     const newStatus = {
       statusName,
       createdBy: new mongoose.Types.ObjectId(createdBy)
@@ -288,6 +364,10 @@ exports.updateRequest = async (req, res) => {
       return res.status(404).json({ message: 'No se encontró el registro' });
     }
 
+    if (!ensureRequestAccess(req, request)) {
+      return res.status(403).json({ message: 'No tienes permisos para actualizar este ticket' });
+    }
+
     const requestUpdated = await Request.findByIdAndUpdate(RequestID, update, { new: true })
       .populate([
         { path: 'requestHeader.store', select: "-planes" },
@@ -319,6 +399,10 @@ exports.deleteRequest = async (req, res) => {
       return res.status(404).json({ message: 'No se encontró el registro' });
     }
 
+    if (!ensureRequestAccess(req, request)) {
+      return res.status(403).json({ message: 'No tienes permisos para eliminar este ticket' });
+    }
+
     const requestDeleted = await Request.findByIdAndDelete(RequestID);
     if (requestDeleted) {
       return res.status(200).json({ message: 'Registro eliminado exitosamente' });
@@ -345,6 +429,10 @@ exports.generatePdf = async (req, res) => {
 
     if (!request) {
       return res.status(404).json({ message: 'Ticket no encontrado' });
+    }
+
+    if (!ensureRequestAccess(req, request)) {
+      return res.status(403).json({ message: 'No tienes permisos para consultar este ticket' });
     }
 
     const pdfBuffer = await generateRequestPdf(request);

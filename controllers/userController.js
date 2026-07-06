@@ -1,4 +1,5 @@
 const User = require("../models/User");
+const Request = require("../models/Request");
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
@@ -60,6 +61,9 @@ const normalizePlatformAccess = (platformAccess = []) => {
   if (!Array.isArray(access)) return [];
   return [...new Set(access.map((platform) => platform.trim().toUpperCase()))];
 };
+
+const isTecnicoProfile = (perfil) =>
+  typeof perfil === "string" && perfil.trim().toLowerCase() === "tecnico";
 
 const sanitizeUser = (userDoc) => {
   const user = userDoc.toObject();
@@ -124,16 +128,82 @@ const getUbications = async (req, res) => {
 
     const users = await User.find(query)
       .sort({ createdAt: -1 })
-      .populate("location");
+      .populate("negocio", "nombre");
+
+    // Calcular estatus en batch: una sola agregación para todos los usuarios
+    const userIds = users.map((u) => u._id);
+
+    const foliosAgrupados = await Request.aggregate([
+      {
+        $match: {
+          "requestHeader.assignedTo": { $in: userIds },
+          "requestHeader.activo": true,
+        },
+      },
+      {
+        $addFields: {
+          ultimoEstatus: { $arrayElemAt: ["$statusHistory", -1] },
+        },
+      },
+      {
+        $match: {
+          "ultimoEstatus.statusName": { $in: ["Pendiente", "En proceso"] },
+        },
+      },
+      {
+        $group: {
+          _id: {
+            tecnico: "$requestHeader.assignedTo",
+            status: "$ultimoEstatus.statusName",
+          },
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    // Indexar conteos por tecnicoId
+    const foliosMap = {};
+    for (const entry of foliosAgrupados) {
+      const tecId = entry._id.tecnico.toString();
+      if (!foliosMap[tecId]) foliosMap[tecId] = {};
+      foliosMap[tecId][entry._id.status] = entry.count;
+    }
+
+    const ESTATUS_COLORES = {
+      disponible: "verde",
+      asignado: "naranja",
+      en_atencion: "azul",
+      en_espera: "rojo",
+    };
 
     const result = users.map((user) => {
       const userObj = sanitizeUser(user);
+      const id = user._id.toString();
+      const folios = foliosMap[id] || {};
+
+      let estatus;
+      if (!user.en_linea) {
+        estatus = "en_espera";
+      } else if (folios["En proceso"] > 0) {
+        estatus = "en_atencion";
+      } else if (folios["Pendiente"] > 0) {
+        estatus = "asignado";
+      } else {
+        estatus = "disponible";
+      }
+
+      const locationSorted = Array.isArray(user.location)
+        ? [...user.location].sort((a, b) => b.createdAt - a.createdAt)
+        : [];
 
       return {
         ...userObj,
-        location: user.location
-          .sort((a, b) => b.createdAt - a.createdAt) // más recientes primero
-          .slice(0, 5), // solo 5
+        ultima_ubicacion: locationSorted[0] || null,
+        location: locationSorted.slice(0, 5),
+        folios_pendientes: folios["Pendiente"] || 0,
+        folios_en_proceso: folios["En proceso"] || 0,
+        estatus,
+        color: ESTATUS_COLORES[estatus],
       };
     });
 
@@ -238,6 +308,21 @@ const createUser = async (req, res) => {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
+    const isTecnico = isTecnicoProfile(perfil);
+    const normalizedPlatformAccess =
+      plataforma_acceso !== undefined
+        ? normalizePlatformAccess(plataforma_acceso)
+        : undefined;
+
+    if (
+      isTecnico &&
+      normalizedPlatformAccess !== undefined &&
+      (normalizedPlatformAccess.length !== 1 || normalizedPlatformAccess[0] !== "MOVIL")
+    ) {
+      return res.status(400).json({
+        message: "Los usuarios con perfil tecnico solo pueden tener acceso MOVIL",
+      });
+    }
 
     const newUser = new User({
       username,
@@ -247,10 +332,9 @@ const createUser = async (req, res) => {
       perfil_ref,
       permissions_override,
       negocio,
-      plataforma_acceso:
-        plataforma_acceso !== undefined
-          ? normalizePlatformAccess(plataforma_acceso)
-          : undefined,
+      plataforma_acceso: isTecnico
+        ? ["MOVIL"]
+        : normalizedPlatformAccess,
       location,
       avatar: avatarPath,
     });
@@ -401,28 +485,52 @@ const updateUser = async (req, res) => {
     return res.status(400).json({ message: "avatar debe ser texto" });
   }
 
-  const updates = {};
-  if (username !== undefined) updates.username = username;
-  if (email !== undefined) updates.email = email;
-  if (password !== undefined) {
-    updates.password = await bcrypt.hash(password, 10);
-  }
-  if (perfil !== undefined) updates.perfil = perfil;
-  if (perfil_ref !== undefined) updates.perfil_ref = perfil_ref || null;
-  if (permissions_override !== undefined) {
-    updates.permissions_override = Array.isArray(permissions_override)
-      ? [...new Set(permissions_override)]
-      : [];
-  }
-  if (negocio !== undefined) updates.negocio = negocio;
-  if (plataforma_acceso !== undefined) {
-    updates.plataforma_acceso = normalizePlatformAccess(plataforma_acceso);
-  }
-  if (location !== undefined) updates.location = location;
-  if (avatarPath !== undefined) updates.avatar = avatarPath;
-  if (activo !== undefined) updates.activo = activo;
-
   try {
+    const existingUser = await User.findById(id).select("perfil plataforma_acceso");
+    if (!existingUser) {
+      return res.status(404).json({ message: "Usuario no encontrado" });
+    }
+
+    const targetPerfil = perfil !== undefined ? perfil : existingUser.perfil;
+    const targetIsTecnico = isTecnicoProfile(targetPerfil);
+    const normalizedPlatformAccess =
+      plataforma_acceso !== undefined
+        ? normalizePlatformAccess(plataforma_acceso)
+        : undefined;
+
+    if (
+      targetIsTecnico &&
+      normalizedPlatformAccess !== undefined &&
+      (normalizedPlatformAccess.length !== 1 || normalizedPlatformAccess[0] !== "MOVIL")
+    ) {
+      return res.status(400).json({
+        message: "Los usuarios con perfil tecnico solo pueden tener acceso MOVIL",
+      });
+    }
+
+    const updates = {};
+    if (username !== undefined) updates.username = username;
+    if (email !== undefined) updates.email = email;
+    if (password !== undefined) {
+      updates.password = await bcrypt.hash(password, 10);
+    }
+    if (perfil !== undefined) updates.perfil = perfil;
+    if (perfil_ref !== undefined) updates.perfil_ref = perfil_ref || null;
+    if (permissions_override !== undefined) {
+      updates.permissions_override = Array.isArray(permissions_override)
+        ? [...new Set(permissions_override)]
+        : [];
+    }
+    if (negocio !== undefined) updates.negocio = negocio;
+    if (targetIsTecnico) {
+      updates.plataforma_acceso = ["MOVIL"];
+    } else if (normalizedPlatformAccess !== undefined) {
+      updates.plataforma_acceso = normalizedPlatformAccess;
+    }
+    if (location !== undefined) updates.location = location;
+    if (avatarPath !== undefined) updates.avatar = avatarPath;
+    if (activo !== undefined) updates.activo = activo;
+
     if (updates.email) {
       const duplicatedEmail = await User.findOne({
         email: updates.email,
@@ -477,6 +585,8 @@ const putUserLocation = async (req, res) => {
     }
 
     user.location.push(location);
+    user.en_linea = true;
+    user.ultimo_ping = new Date();
     await user.save();
     res.json(sanitizeUser(user));
   } catch (error) {
@@ -614,6 +724,31 @@ const getOwnProfile = async (req, res) => {
   }
 };
 
+// Marcar técnico como desconectado (fuera de línea)
+const disconnectTecnico = async (req, res) => {
+  const { id } = req.params;
+
+  if (!isValidObjectId(id)) {
+    return res.status(400).json({ message: "Id de usuario inválido" });
+  }
+
+  try {
+    const user = await User.findByIdAndUpdate(
+      id,
+      { en_linea: false },
+      { new: true }
+    );
+
+    if (!user) {
+      return res.status(404).json({ message: "Usuario no encontrado" });
+    }
+
+    res.json({ message: "Usuario marcado como desconectado", user: sanitizeUser(user) });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   getUsers,
   getUbications,
@@ -626,4 +761,5 @@ module.exports = {
   updateOwnAvatar,
   updateOwnProfile,
   getOwnProfile,
+  disconnectTecnico,
 };

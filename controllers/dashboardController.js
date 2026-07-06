@@ -502,3 +502,30 @@ exports.getAllInspectors = async (req, res) => {
         });
     }
 };
+
+/**
+ * GET /dashboard/tecnicos/estatus
+ * Obtener lista de técnicos con su estatus de disponibilidad calculado
+ */
+exports.getTecnicosConEstatus = async (req, res) => {
+    try {
+        const filters = {};
+        if (req.query.negocioId) {
+            filters.negociosIds = [req.query.negocioId];
+        }
+
+        const result = await dashboardService.getTecnicosConEstatus(filters);
+
+        res.status(200).json({
+            success: true,
+            message: 'Estatus de técnicos obtenido',
+            data: result,
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: error.message,
+            data: null,
+        });
+    }
+};

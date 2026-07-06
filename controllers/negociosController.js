@@ -1,5 +1,6 @@
 const Negocios = require("../models/Negocios");
 const mongoose = require("mongoose");
+const { PERMISSIONS } = require("../services/rbac.service");
 
 const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
 
@@ -28,12 +29,37 @@ const validateDesfaseOrdering = (bajo, medio, alto) => {
   return null;
 };
 
+const hasGlobalNegociosAccess = (req) => {
+  if (!req?.authUser) return false;
+  if (String(req.authUser.perfil || "").toLowerCase() === "admin") return true;
+  return Array.isArray(req.authPermissions)
+    && req.authPermissions.includes(PERMISSIONS.NEGOCIOS_MANAGE);
+};
+
 const getNegocios = async (req, res) => {
   try {
-    const negocios = await Negocios.find()
+    const query = hasGlobalNegociosAccess(req)
+      ? {}
+      : req?.authUser?.negocio
+        ? { _id: req.authUser.negocio }
+        : { _id: { $in: [] } };
+
+    const negocios = await Negocios.find(query)
       .populate("formularios")
       .populate("plan")
       .sort({ createdAt: -1 });
+    res.json(negocios);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+const getNegociosPublic = async (_req, res) => {
+  try {
+    const negocios = await Negocios.find({ activo: true })
+      .select("_id nombre_negocio sector")
+      .sort({ nombre_negocio: 1 });
+
     res.json(negocios);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -45,6 +71,15 @@ const getNegocioById = async (req, res) => {
 
   if (!isValidObjectId(id)) {
     return res.status(400).json({ message: "Id de negocio inválido" });
+  }
+
+  if (!hasGlobalNegociosAccess(req)) {
+    const ownNegocioId = req?.authUser?.negocio ? String(req.authUser.negocio) : null;
+    if (!ownNegocioId || ownNegocioId !== String(id)) {
+      return res.status(403).json({
+        message: "No tienes permisos para consultar este negocio",
+      });
+    }
   }
 
   try {
@@ -300,6 +335,15 @@ const getDesfaseNegocio = async (req, res) => {
     return res.status(400).json({ message: "Id de negocio inválido" });
   }
 
+  if (!hasGlobalNegociosAccess(req)) {
+    const ownNegocioId = req?.authUser?.negocio ? String(req.authUser.negocio) : null;
+    if (!ownNegocioId || ownNegocioId !== String(id)) {
+      return res.status(403).json({
+        message: "No tienes permisos para consultar este negocio",
+      });
+    }
+  }
+
   try {
     const negocio = await Negocios.findById(id).select(
       "desfase_bajo_horas desfase_bajo_color desfase_medio_horas desfase_medio_color desfase_alto_horas desfase_alto_color"
@@ -462,6 +506,7 @@ const deleteNegocio = async (req, res) => {
 };
 
 module.exports = {
+  getNegociosPublic,
   getNegocios,
   getNegocioById,
   createNegocio,

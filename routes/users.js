@@ -21,6 +21,7 @@ router.get('/ubications', userController.getUbications);
 router.get('/:id', requireAuth, requirePermissions([PERMISSIONS.USERS_VIEW]), userController.getUserById);
 router.put('/:id', requireAuth, requirePermissions([PERMISSIONS.USERS_UPDATE]), upload.single('avatar'), userController.updateUser);
 router.put('/putlocation/:id', userController.putUserLocation);
+router.patch('/:id/disconnect', userController.disconnectTecnico);
 router.delete('/:id', requireAuth, requirePermissions([PERMISSIONS.USERS_DELETE]), userController.deleteUser);
 
 module.exports = router;

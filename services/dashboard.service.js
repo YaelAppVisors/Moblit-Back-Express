@@ -623,6 +623,118 @@ const getDashboardSummary = async (filters = {}) => {
     }
 };
 
+/**
+ * Calcular el estatus de disponibilidad de los técnicos.
+ *
+ * Reglas:
+ *   en_espera  → en_linea = false  (rojo)
+ *   disponible → en_linea = true + sin folios Pendiente/En proceso  (verde)
+ *   asignado   → en_linea = true + tiene folios en Pendiente  (naranja)
+ *   en_atencion→ en_linea = true + tiene al menos un folio en "En proceso"  (azul)
+ *
+ * Si tiene folios en ambos estados (Pendiente + En proceso) prevalece "en_atencion".
+ */
+const getTecnicosConEstatus = async (filters = {}) => {
+    try {
+        const userQuery = {
+            activo: true,
+            perfil: 'tecnico',
+        };
+
+        if (filters.negociosIds && filters.negociosIds.length > 0) {
+            userQuery.negocio = { $in: filters.negociosIds };
+        }
+
+        const tecnicos = await User.find(userQuery)
+            .populate('negocio', 'nombre')
+            .lean();
+
+        if (tecnicos.length === 0) return [];
+
+        const tecnicoIds = tecnicos.map(t => t._id);
+
+        // Obtener folios activos asignados a estos técnicos agrupados por técnico y estado
+        const foliosAgrupados = await Request.aggregate([
+            {
+                $match: {
+                    'requestHeader.assignedTo': { $in: tecnicoIds },
+                    'requestHeader.activo': true,
+                    'statusHistory.0.statusName': { $in: ['Pendiente', 'En proceso'] },
+                },
+            },
+            {
+                $addFields: {
+                    ultimoEstatus: { $arrayElemAt: ['$statusHistory', -1] },
+                },
+            },
+            {
+                $group: {
+                    _id: {
+                        tecnico: '$requestHeader.assignedTo',
+                        status: '$ultimoEstatus.statusName',
+                    },
+                    count: { $sum: 1 },
+                },
+            },
+        ]);
+
+        // Indexar por tecnicoId para acceso O(1)
+        const foliosMap = {};
+        for (const entry of foliosAgrupados) {
+            const tecId = entry._id.tecnico.toString();
+            if (!foliosMap[tecId]) foliosMap[tecId] = {};
+            foliosMap[tecId][entry._id.status] = entry.count;
+        }
+
+        const ESTATUS_COLORES = {
+            disponible: 'verde',
+            asignado: 'naranja',
+            en_atencion: 'azul',
+            en_espera: 'rojo',
+        };
+
+        const result = tecnicos.map(tecnico => {
+            const id = tecnico._id.toString();
+            const folios = foliosMap[id] || {};
+            let estatus;
+
+            if (!tecnico.en_linea) {
+                estatus = 'en_espera';
+            } else if (folios['En proceso'] > 0) {
+                estatus = 'en_atencion';
+            } else if (folios['Pendiente'] > 0) {
+                estatus = 'asignado';
+            } else {
+                estatus = 'disponible';
+            }
+
+            // Última ubicación conocida
+            const ultimaUbicacion =
+                Array.isArray(tecnico.location) && tecnico.location.length > 0
+                    ? tecnico.location[tecnico.location.length - 1]
+                    : null;
+
+            return {
+                _id: tecnico._id,
+                username: tecnico.username,
+                email: tecnico.email,
+                negocio: tecnico.negocio,
+                en_linea: tecnico.en_linea,
+                ultimo_ping: tecnico.ultimo_ping,
+                ultima_ubicacion: ultimaUbicacion,
+                folios_pendientes: folios['Pendiente'] || 0,
+                folios_en_proceso: folios['En proceso'] || 0,
+                estatus,
+                color: ESTATUS_COLORES[estatus],
+            };
+        });
+
+        return result;
+    } catch (error) {
+        throw new Error(`Error al obtener estatus de técnicos: ${error.message}`);
+    }
+};
+
 module.exports = {
     getTotalInspections,
     getActiveInspectors,
@@ -636,5 +748,6 @@ module.exports = {
     getInspectorStatus,
     getInspectorWorkload,
     getAllInspectors,
-    getDashboardSummary
+    getDashboardSummary,
+    getTecnicosConEstatus,
 };

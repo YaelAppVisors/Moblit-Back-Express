@@ -73,7 +73,17 @@ const userSchema = new mongoose.Schema(
     },
     avatar: {
       type: String
-    }
+    },
+    en_linea: {
+      type: Boolean,
+      required: false,
+      default: false,
+    },
+    ultimo_ping: {
+      type: Date,
+      required: false,
+      default: null,
+    },
   },
   {
     timestamps: true,
