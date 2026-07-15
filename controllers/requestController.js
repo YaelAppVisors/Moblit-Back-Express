@@ -185,9 +185,9 @@ exports.CreateRequest = async (req, res) => {
         const populatedRequest = await Request.findById(requestCreated._id)
             .populate([
                 {path: 'requestHeader.store', select: "-planes"},
-                {path: 'requestHeader.assignedTo', select: "-password"},
-                {path: 'requestHeader.createdBy', select: "-password"},
-                {path: 'statusHistory.createdBy', select: "-password"}
+                {path: 'requestHeader.assignedTo', select: "-password -location"},
+                {path: 'requestHeader.createdBy', select: "-password -location"},
+                {path: 'statusHistory.createdBy', select: "-password -location"}
             ]);
         
         res.status(200).json({ message: 'El ticket se creó con éxito', data: populatedRequest });
@@ -211,9 +211,9 @@ exports.getRequestById = async (req, res) => {
         await syncRequestDesfaseStatus(request);
         const populatedRequest = await request.populate([
             {path: 'requestHeader.store', select: "-planes"},
-            {path: 'requestHeader.assignedTo', select: "-password"},
-            {path: 'requestHeader.createdBy', select: "-password"},
-            {path: 'statusHistory.createdBy', select: "-password"}
+            {path: 'requestHeader.assignedTo', select: "-password -location"},
+            {path: 'requestHeader.createdBy', select: "-password -location"},
+            {path: 'statusHistory.createdBy', select: "-password -location"}
         ]);
         return res.status(200).json({ message: "Ticket encontrado", data: populatedRequest });
     } else {
@@ -232,9 +232,9 @@ exports.getAllRequest = async (req, res) => {
         await Promise.all(request.map((item) => syncRequestDesfaseStatus(item)));
         const populatedRequests = await Request.populate(request, [
             {path: 'requestHeader.store', select: "-planes"},
-            {path: 'requestHeader.assignedTo', select: "-password"},
-            {path: 'requestHeader.createdBy', select: "-password"},
-            {path: 'statusHistory.createdBy', select: "-password"}
+            {path: 'requestHeader.assignedTo', select: "-password -location"},
+            {path: 'requestHeader.createdBy', select: "-password -location"},
+            {path: 'statusHistory.createdBy', select: "-password -location"}
         ]);
         return res.status(200).json({ message: "Tickets encontrados", data: populatedRequests });
     } else {
@@ -259,9 +259,9 @@ exports.getRequestByAssignedTo = async (req, res) => {
         await Promise.all(request.map((item) => syncRequestDesfaseStatus(item)));
         const populatedRequests = await Request.populate(request, [
             {path: 'requestHeader.store', select: "-planes"},
-            {path: 'requestHeader.assignedTo', select: "-password"},
-            {path: 'requestHeader.createdBy', select: "-password"},
-            {path: 'statusHistory.createdBy', select: "-password"}
+            {path: 'requestHeader.assignedTo', select: "-password -location"},
+            {path: 'requestHeader.createdBy', select: "-password -location"},
+            {path: 'statusHistory.createdBy', select: "-password -location"}
         ]);
         return res.status(200).json({ message: "Tickets encontrado", data: populatedRequests });
     } else {
@@ -289,9 +289,9 @@ exports.getRequestByNegocio = async (req, res) => {
         await Promise.all(request.map((item) => syncRequestDesfaseStatus(item)));
         const populatedRequests = await Request.populate(request, [
             {path: 'requestHeader.store', select: "-planes"},
-            {path: 'requestHeader.assignedTo', select: "-password"},
-            {path: 'requestHeader.createdBy', select: "-password"},
-            {path: 'statusHistory.createdBy', select: "-password"}
+            {path: 'requestHeader.assignedTo', select: "-password -location"},
+            {path: 'requestHeader.createdBy', select: "-password -location"},
+            {path: 'statusHistory.createdBy', select: "-password -location"}
         ]);
         return res.status(200).json({ message: "Tickets encontrados", data: populatedRequests });
     } else {
@@ -338,9 +338,9 @@ exports.updateRequestStatus = async (req, res) => {
     const updatedRequest = await Request.findById(RequestID);
     const populatedUpdatedRequest = await updatedRequest.populate([
       { path: 'requestHeader.store', select: "-planes" },
-      { path: 'requestHeader.assignedTo', select: "-password" },
-      { path: 'requestHeader.createdBy', select: "-password" },
-      { path: 'statusHistory.createdBy', select: "-password" }
+      { path: 'requestHeader.assignedTo', select: "-password -location" },
+      { path: 'requestHeader.createdBy', select: "-password -location" },
+      { path: 'statusHistory.createdBy', select: "-password -location" }
     ]);
 
     return res.status(200).json({ 
@@ -371,9 +371,9 @@ exports.updateRequest = async (req, res) => {
     const requestUpdated = await Request.findByIdAndUpdate(RequestID, update, { new: true })
       .populate([
         { path: 'requestHeader.store', select: "-planes" },
-        { path: 'requestHeader.assignedTo', select: "-password" },
-        { path: 'requestHeader.createdBy', select: "-password" },
-        { path: 'statusHistory.createdBy', select: "-password" }
+        { path: 'requestHeader.assignedTo', select: "-password -location" },
+        { path: 'requestHeader.createdBy', select: "-password -location" },
+        { path: 'statusHistory.createdBy', select: "-password -location" }
       ]);
 
     if (requestUpdated) {
@@ -422,8 +422,8 @@ exports.generatePdf = async (req, res) => {
     const request = await Request.findById(requestID)
       .populate([
         { path: 'requestHeader.store',      select: '-planes' },
-        { path: 'requestHeader.assignedTo', select: '-password' },
-        { path: 'requestHeader.createdBy',  select: '-password' },
+        { path: 'requestHeader.assignedTo', select: '-password -location' },
+        { path: 'requestHeader.createdBy',  select: '-password -location' },
       ])
       .lean();
 
