@@ -226,9 +226,21 @@ exports.getRequestById = async (req, res) => {
 
 exports.getAllRequest = async (req, res) => {
    try {
-  const request = await Request.find(buildStoreScopeFilter(req)).sort({ createdAt: -1 });
+    // Paginación
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
 
-    if (request) {
+    // Contar total de registros
+    const total = await Request.countDocuments(buildStoreScopeFilter(req));
+    const totalPages = Math.ceil(total / limit);
+
+    const request = await Request.find(buildStoreScopeFilter(req))
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
+
+    if (request && request.length > 0) {
         await Promise.all(request.map((item) => syncRequestDesfaseStatus(item)));
         const populatedRequests = await Request.populate(request, [
             {path: 'requestHeader.store', select: "-planes"},
@@ -236,9 +248,29 @@ exports.getAllRequest = async (req, res) => {
             {path: 'requestHeader.createdBy', select: "-password -location"},
             {path: 'statusHistory.createdBy', select: "-password -location"}
         ]);
-        return res.status(200).json({ message: "Tickets encontrados", data: populatedRequests });
+        return res.status(200).json({ 
+          message: "Tickets encontrados", 
+          data: populatedRequests,
+          pagination: {
+            page,
+            limit,
+            total,
+            totalPages,
+            hasMore: page < totalPages
+          }
+        });
     } else {
-        return res.status(400).json({ message: "No hay ningún ticket" });
+        return res.status(200).json({ 
+          message: "No hay ningún ticket",
+          data: [],
+          pagination: {
+            page,
+            limit,
+            total: 0,
+            totalPages: 0,
+            hasMore: false
+          }
+        });
     }
   } catch (error) {
     return res.status(500).json({ message: error?.message });
